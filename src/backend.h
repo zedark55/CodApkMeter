@@ -10,7 +10,6 @@
 class Backend : public QObject {
     Q_OBJECT
     Q_PROPERTY(QVariantList meters READ meters NOTIFY changed)
-    Q_PROPERTY(QVariantList protocols READ protocols NOTIFY protocolsChanged)
     Q_PROPERTY(QVariantList captures READ captures NOTIFY capturesChanged)
     Q_PROPERTY(bool scanning READ scanning NOTIFY stateChanged)
     Q_PROPERTY(bool demo READ demo WRITE setDemo NOTIFY stateChanged)
@@ -21,7 +20,6 @@ public:
     explicit Backend(QObject *parent = nullptr);
     ~Backend() override;
     QVariantList meters() const;
-    QVariantList protocols() const;
     QVariantList captures() const { return m_captures; }
     bool scanning() const { return m_demo ? demoTimer.isActive() : agent.isActive(); }
     bool demo() const { return m_demo; }
@@ -32,15 +30,6 @@ public:
     Q_INVOKABLE void toggleScan();
     Q_INVOKABLE void startScan();
     Q_INVOKABLE void stopScan();
-    Q_INVOKABLE QString protocolText(const QString &id) const;
-    Q_INVOKABLE QString templateText() const;
-    Q_INVOKABLE QString validateProtocol(const QString &text) const;
-    Q_INVOKABLE QString saveProtocol(const QString &text);
-    Q_INVOKABLE QString deleteProtocol(const QString &id);
-    Q_INVOKABLE QString importProtocol(const QUrl &url);
-    Q_INVOKABLE QVariantMap readProtocol(const QUrl &url) const;
-    Q_INVOKABLE QString exportProtocol(const QString &text, const QUrl &url);
-    Q_INVOKABLE QString testPacket(const QString &text, const QString &hex, const QString &keyHex) const;
     Q_INVOKABLE QString saveKey(const QString &id, const QString &hex);
     Q_INVOKABLE QString forgetKey(const QString &id);
     Q_INVOKABLE QString renameMeter(const QString &id, const QString &name);
@@ -50,7 +39,6 @@ public:
 signals:
     void changed();
     void stateChanged();
-    void protocolsChanged();
     void capturesChanged();
 private:
     friend class BackendTests;
@@ -77,9 +65,7 @@ private:
     void demoTick();
     void load();
     bool persist();
-    bool writeProtocols(const QVector<Protocol> &items);
     void setStatus(const QString &message);
     int meterIndex(const QString &id) const;
     void retryMeter(int index);
-    static QString path(const QUrl &url);
 };

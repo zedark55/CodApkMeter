@@ -36,44 +36,8 @@ ApplicationWindow {
         return (filterKind === "all" || m.kind === filterKind || (filterKind === "other" && ["water","electricity"].indexOf(m.kind) < 0)) &&
             (m.name.toLowerCase().indexOf(query.toLowerCase()) >= 0 || m.serial.toLowerCase().indexOf(query.toLowerCase()) >= 0)
     })
-    property string editorId: ""
-    property string editorText: ""
-    property var draft: ({})
-    property bool jsonMode: false
-    property string editorFeedback: ""
-    property string testFeedback: ""
     property string toastText: ""
-
     function notify(error, success) { toastText = error.length ? error : success; toast.open(); toastTimer.restart() }
-    function openEditor(id) {
-        editorId = id; editorText = id ? backend.protocolText(id) : backend.templateText()
-        try { draft = JSON.parse(editorText) } catch (e) { draft = ({}) }
-        editorFeedback = ""; testFeedback = ""; jsonMode = false; protocolEditor.open()
-    }
-    function patch(key, value) {
-        let obj
-        try { obj = JSON.parse(editorText) } catch(e) { editorFeedback = "Сначала исправьте JSON"; return }
-        obj[key] = value
-        editorText = JSON.stringify(obj, null, 2); draft = obj
-    }
-    function patchNested(section, key, value) {
-        let obj
-        try { obj = JSON.parse(editorText) } catch(e) { editorFeedback = "Сначала исправьте JSON"; return }
-        if (!obj[section]) obj[section] = ({})
-        obj[section][key] = value
-        editorText = JSON.stringify(obj, null, 2); draft = obj
-    }
-    function patchField(index, key, value) {
-        let obj = JSON.parse(editorText)
-        obj.fields[index][key] = value
-        editorText = JSON.stringify(obj, null, 2); draft = obj
-    }
-    function kindName(kind) { return ({water:"Вода",electricity:"Электричество",gas:"Газ",heat:"Тепло",other:"Другое"})[kind] || kind }
-    function commitProtocol() {
-        let error = backend.saveProtocol(window.editorText)
-        window.editorFeedback = error || "Протокол сохранён"
-        if (!error) window.editorId = window.draft.id
-    }
 
     Rectangle {
         id: sidebar
@@ -91,20 +55,20 @@ ApplicationWindow {
             }
             SectionLabel { text: "BLUETOOTH LE"; Layout.topMargin: 6; Layout.bottomMargin: 38; font.pixelSize: 9 }
             Repeater {
-                model: ["Обзор", "Протоколы", "Эфир", "Настройки"]
+                model: ["Обзор", "Эфир", "Настройки"]
                 delegate: Button {
                     required property string modelData
                     required property int index
                     Layout.fillWidth: true; implicitHeight: 46
                     onClicked: window.page = index
-                    contentItem: Text { textFormat: Text.PlainText; text: ["◫  ", "{ }  ", "◎  ", "⚙  "][index] + modelData; color: window.page === index ? "#83e4ce" : "#91a2b8"; font.pixelSize: 13; verticalAlignment: Text.AlignVCenter; leftPadding: 12 }
+                    contentItem: Text { textFormat: Text.PlainText; text: ["◫  ", "◎  ", "⚙  "][index] + modelData; color: window.page === index ? "#83e4ce" : "#91a2b8"; font.pixelSize: 13; verticalAlignment: Text.AlignVCenter; leftPadding: 12 }
                     background: Rectangle { radius: 10; color: window.page === index ? "#1b3537" : "transparent" }
                 }
             }
             Item { Layout.fillHeight: true }
             Rectangle { Layout.fillWidth: true; height: 1; color: "#263345" }
             Text { textFormat: Text.PlainText; text: "Ближе к данным."; color: "#b8c8da"; font.pixelSize: 12; Layout.topMargin: 14 }
-            Text { textFormat: Text.PlainText; text: "CodApkMeter / 0.1.0"; color: "#63758e"; font.pixelSize: 10 }
+            Text { textFormat: Text.PlainText; text: "CodApkMeter / " + Qt.application.version; color: "#63758e"; font.pixelSize: 10 }
         }
     }
 
@@ -196,7 +160,7 @@ ApplicationWindow {
                         ColumnLayout {
                             anchors.fill: parent; anchors.margins: 24; spacing: 12
                             Text { textFormat: Text.PlainText; text: backend.meters.length ? "Ничего не найдено" : "Здесь появятся ваши приборы"; color: "#e8eef7"; font.pixelSize: 18; font.weight: Font.Medium; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-                            Text { textFormat: Text.PlainText; text: backend.meters.length ? "Попробуйте другой запрос или фильтр." : "Добавьте протокол прибора и включите приём.\nИли посмотрите, как всё работает, в деморежиме."; color: "#91a2b8"; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true; lineHeight: 1.4 }
+                            Text { textFormat: Text.PlainText; text: backend.meters.length ? "Попробуйте другой запрос или фильтр." : "Включите приём рядом с поддерживаемым прибором.\nИли посмотрите, как всё работает, в деморежиме."; color: "#91a2b8"; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true; lineHeight: 1.4 }
                             ActionButton { text: "Посмотреть демо"; visible: !backend.demo && backend.meters.length === 0; secondary: true; onClicked: backend.demo = true }
                             Item { Layout.fillHeight: true }
                         }
@@ -205,47 +169,6 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Text { textFormat: Text.PlainText; text: "Локально. Без облака. Ваши данные у вас."; color: "#63758e"; font.pixelSize: 10; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                         Button { text: "Экспорт ↗"; flat: true; onClicked: readingsExport.open(); palette.buttonText: "#83e4ce" }
-                    }
-                }
-            }
-            // Protocol library
-            ScrollView {
-                id: library; clip: true; contentWidth: availableWidth
-                ColumnLayout {
-                    width: library.availableWidth; spacing: 20
-                    Text { textFormat: Text.PlainText; text: "Язык ваших приборов"; color: "#f1f6ff"; font.pixelSize: window.wide ? 32 : 27; font.weight: Font.DemiBold; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-                    Text { textFormat: Text.PlainText; text: "Новый формат — без пересборки приложения. Опишите поля, задайте шифрование и проверьте пакет."; color: "#91a2b8"; font.pixelSize: 13; wrapMode: Text.WordWrap; Layout.fillWidth: true; lineHeight: 1.4 }
-                    RowLayout {
-                        ActionButton { text: "+ Создать"; onClicked: window.openEditor("") }
-                        ActionButton { text: "Импорт JSON"; secondary: true; onClicked: protocolImport.open() }
-                        Item { Layout.fillWidth: true }
-                    }
-                    SectionLabel { text: "БИБЛИОТЕКА  /  " + backend.protocols.length }
-                    Repeater {
-                        model: backend.protocols
-                        Panel {
-                            required property var modelData
-                            Layout.fillWidth: true; implicitHeight: 116
-                            ColumnLayout {
-                                anchors.fill: parent; anchors.margins: 18; spacing: 8
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    Text { textFormat: Text.PlainText; text: modelData.name; color: "#e8eef7"; font.pixelSize: 15; font.weight: Font.Medium; Layout.fillWidth: true; elide: Text.ElideRight }
-                                    Text { textFormat: Text.PlainText; text: "↗"; color: "#83e4ce"; font.pixelSize: 19 }
-                                }
-                                Text { textFormat: Text.PlainText; text: window.kindName(modelData.kind) + "  ·  " + modelData.mode.toUpperCase() + "  ·  " + modelData.fields + " поля"; color: "#91a2b8"; font.pixelSize: 11 }
-                                Text { textFormat: Text.PlainText; text: modelData.builtin ? "УЧЕБНЫЙ ФОРМАТ · НЕ РЕАЛЬНЫЙ ПРИБОР" : modelData.id; color: modelData.builtin ? "#f2c27a" : "#63758e"; font.pixelSize: 9; font.letterSpacing: 0.7 }
-                            }
-                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: window.openEditor(parent.modelData.id) }
-                        }
-                    }
-                    Panel {
-                        Layout.fillWidth: true; implicitHeight: 130; color: "#162b30"; border.color: "#2b4e4d"
-                        ColumnLayout {
-                            anchors.fill: parent; anchors.margins: 20; spacing: 8
-                            Text { textFormat: Text.PlainText; text: "От документации к показаниям"; color: "#83e4ce"; font.pixelSize: 15; font.weight: Font.Medium }
-                            Text { textFormat: Text.PlainText; text: "1. Найдите Manufacturer ID или Service UUID.\n2. Задайте идентификатор, поля и схему шифрования.\n3. Проверьте HEX-пакет и сохраните протокол."; color: "#9dbcb8"; font.pixelSize: 12; lineHeight: 1.5; Layout.fillWidth: true; wrapMode: Text.WordWrap }
-                        }
                     }
                 }
             }
@@ -299,10 +222,10 @@ ApplicationWindow {
                     }
                     SectionLabel { text: "ПРИВАТНОСТЬ И КЛЮЧИ" }
                     Text { textFormat: Text.PlainText; text: backend.keyStorageInfo; color: "#c0cedf"; font.pixelSize: 13; Layout.fillWidth: true; wrapMode: Text.WordWrap; lineHeight: 1.5 }
-                    Text { textFormat: Text.PlainText; text: "Ключ задаётся отдельно в карточке каждого прибора. Протоколы и экспорт показаний не содержат ключей. Данные не отправляются на сервер."; color: "#91a2b8"; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.WordWrap; lineHeight: 1.5 }
+                    Text { textFormat: Text.PlainText; text: "Ключ задаётся отдельно в карточке каждого прибора. Экспорт показаний не содержит ключей. Данные не отправляются на сервер."; color: "#91a2b8"; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.WordWrap; lineHeight: 1.5 }
                     SectionLabel { text: "КАК РАБОТАЕТ ПРИЁМ"; Layout.topMargin: 8 }
                     Text { textFormat: Text.PlainText; text: "Приложение слушает Bluetooth LE advertising. Прямое соединение и сопряжение не нужны. При сворачивании приём приостанавливается и возобновляется после возврата.\n\nAndroid 12+ запрашивает доступ к устройствам поблизости. Android 8–11 требует разрешение и включённую геолокацию.\n\nQt может объединять повторные advertising-пакеты и scan response. Счётчик событий не равен числу радиопакетов.\n\nСовместимость с реальными моделями требует документации производителя и проверки на телефоне. Произвольный зашифрованный пакет нельзя расшифровать без правильного формата и ключа."; color: "#91a2b8"; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.WordWrap; lineHeight: 1.6 }
-                    Text { textFormat: Text.PlainText; text: "CodApkMeter 0.1.0\nQt 6 / C++ / QML"; color: "#63758e"; font.pixelSize: 11; lineHeight: 1.6; Layout.topMargin: 20 }
+                    Text { textFormat: Text.PlainText; text: "CodApkMeter " + Qt.application.version + "\nQt 6 / C++ / QML"; color: "#63758e"; font.pixelSize: 11; lineHeight: 1.6; Layout.topMargin: 20 }
                 }
             }
         }
@@ -316,7 +239,7 @@ ApplicationWindow {
         RowLayout {
             anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10; spacing: 0
             Repeater {
-                model: ["Обзор", "Протоколы", "Эфир", "Настройки"]
+                model: ["Обзор", "Эфир", "Настройки"]
                 Button {
                     required property string modelData
                     required property int index
@@ -325,7 +248,7 @@ ApplicationWindow {
                     background: Rectangle { color: "transparent" }
                     contentItem: ColumnLayout {
                         spacing: 3
-                        Text { textFormat: Text.PlainText; text: ["◫", "{ }", "◎", "⚙"][index]; color: window.page === index ? "#83e4ce" : "#63758e"; font.pixelSize: 21; Layout.alignment: Qt.AlignHCenter }
+                        Text { textFormat: Text.PlainText; text: ["◫", "◎", "⚙"][index]; color: window.page === index ? "#83e4ce" : "#63758e"; font.pixelSize: 21; Layout.alignment: Qt.AlignHCenter }
                         Text { textFormat: Text.PlainText; text: modelData; color: window.page === index ? "#83e4ce" : "#91a2b8"; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
                     }
                 }
@@ -391,129 +314,13 @@ ApplicationWindow {
                     ActionButton { text: "Сохранить ключ"; onClicked: { let error = backend.saveKey(window.selectedId,meterKey.text); if (!error) meterKey.text = ""; window.notify(error,"Ключ сохранён; результат расшифровки — в карточке") } }
                     ActionButton { text: "Удалить ключ"; secondary: true; danger: true; onClicked: window.notify(backend.forgetKey(window.selectedId),"Ключ удалён") }
                 }
-                Text { textFormat: Text.PlainText; visible: window.selected.demo === true; text: "Учебный ключ: 00112233445566778899aabbccddeeff\nИспользуйте его для проверки демопакетов в редакторе."; color: "#f2c27a"; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true; font.pixelSize: 10 }
+                Text { textFormat: Text.PlainText; visible: window.selected.demo === true; text: "Учебный прибор · показания сгенерированы для демонстрации."; color: "#f2c27a"; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true; font.pixelSize: 10 }
                 Item { height: 8 }
             }
         }
         onClosed: meterKey.text = ""
     }
 
-    Popup {
-        id: protocolEditor; objectName: "protocolEditor"; parent: Overlay.overlay; anchors.centerIn: parent
-        width: Math.min(window.width - 16, 820); height: window.height - 24; modal: true; padding: window.wide ? 24 : 16
-        closePolicy: Popup.CloseOnEscape
-        background: Panel { color: "#141e2c" }
-        ColumnLayout {
-            anchors.fill: parent; spacing: 12
-            RowLayout {
-                Layout.fillWidth: true
-                Text { textFormat: Text.PlainText; text: "Мастер протоколов"; color: "#f1f6ff"; font.pixelSize: 22; font.weight: Font.DemiBold; Layout.fillWidth: true; elide: Text.ElideRight }
-                Button { text: "✕"; flat: true; onClicked: protocolEditor.close(); Accessible.name: "Закрыть редактор" }
-            }
-            RowLayout {
-                ActionButton { text: "Конструктор"; secondary: window.jsonMode; onClicked: { try { window.draft = JSON.parse(window.editorText); window.jsonMode = false } catch(e) { window.editorFeedback = "Сначала исправьте JSON" } } }
-                ActionButton { text: "JSON"; secondary: !window.jsonMode; onClicked: window.jsonMode = true }
-                Item { Layout.fillWidth: true }
-            }
-            Text { textFormat: Text.PlainText; visible: window.editorId.indexOf("demo-") === 0; text: "Учебный шаблон. Для сохранения копии измените id."; color: "#f2c27a"; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-            ScrollView {
-                id: editorScroll; Layout.fillWidth: true; Layout.fillHeight: true; contentWidth: availableWidth; clip: true
-                ColumnLayout {
-                    width: editorScroll.availableWidth; spacing: 16
-                    ColumnLayout {
-                        visible: !window.jsonMode; Layout.fillWidth: true; spacing: 16
-                        SectionLabel { text: "01  /  ИДЕНТИФИКАЦИЯ" }
-                        GridLayout {
-                            Layout.fillWidth: true; columns: window.wide ? 2 : 1; columnSpacing: 12; rowSpacing: 12
-                            FormField { label: "Название"; text: window.draft.name || ""; Layout.fillWidth: true; onEdited: function(v) { window.patch("name",v) } }
-                            FormField { label: "Уникальный id"; text: window.draft.id || ""; Layout.fillWidth: true; onEdited: function(v) { window.patch("id",v) } }
-                            ColumnLayout { Layout.fillWidth: true; Text { textFormat: Text.PlainText; text: "Тип прибора"; color: "#91a2b8"; font.pixelSize: 12 } ComboBox { Layout.fillWidth: true; model: ["water","electricity","gas","heat","other"]; currentIndex: Math.max(0,model.indexOf(window.draft.kind)); onActivated: window.patch("kind",currentText) } }
-                            ColumnLayout { Layout.fillWidth: true; Text { textFormat: Text.PlainText; text: "Источник advertising-данных"; color: "#91a2b8"; font.pixelSize: 12 } ComboBox { Layout.fillWidth: true; model: ["manufacturer","service"]; currentIndex: Math.max(0,model.indexOf(window.draft.source)); onActivated: window.patch("source",currentText) } }
-                            FormField { visible: window.draft.source !== "service"; label: "Company ID (десятичное число)"; text: String(window.draft.companyId === undefined ? 65535 : window.draft.companyId); Layout.fillWidth: true; onEdited: function(v) { window.patch("companyId",Number(v)) } }
-                            FormField { visible: window.draft.source === "service"; label: "Service UUID (полный)"; text: window.draft.serviceUuid || ""; Layout.fillWidth: true; onEdited: function(v) { window.patch("serviceUuid",v) } }
-                            FormField { label: "Префикс пакета (HEX)"; text: window.draft.prefix || ""; Layout.fillWidth: true; onEdited: function(v) { window.patch("prefix",v) } }
-                            FormField { label: "ID прибора: смещение"; text: String((window.draft.identity || {}).offset || 0); Layout.fillWidth: true; onEdited: function(v) { window.patchNested("identity","offset",Number(v)) } }
-                            FormField { label: "ID прибора: длина в байтах"; text: String((window.draft.identity || {}).length || 0); Layout.fillWidth: true; onEdited: function(v) { window.patchNested("identity","length",Number(v)) } }
-                        }
-                        SectionLabel { text: "02  /  РАСШИФРОВКА" }
-                        ComboBox { Layout.fillWidth: true; model: ["none","aes-128-ccm","aes-128-ctr","aes-128-cbc"]; currentIndex: Math.max(0,model.indexOf((window.draft.encryption || {}).mode)); onActivated: window.patchNested("encryption","mode",currentText) }
-                        GridLayout {
-                            Layout.fillWidth: true; columns: window.wide ? 3 : 2; columnSpacing: 12; rowSpacing: 12
-                            Repeater {
-                                model: [{key:"offset",label:"Смещение данных"},{key:"length",label:"Длина (-1 до конца)"},{key:"nonceOffset",label:"Смещение nonce"},{key:"nonceLength",label:"Длина nonce"},{key:"tagLength",label:"Длина CCM тега"},{key:"aadLength",label:"Длина AAD с начала"}]
-                                FormField {
-                                    required property var modelData
-                                    Layout.fillWidth: true; label: modelData.label
-                                    text: String((window.draft.encryption || {})[modelData.key] === undefined ? 0 : window.draft.encryption[modelData.key])
-                                    onEdited: function(v) { window.patchNested("encryption",modelData.key,Number(v)) }
-                                }
-                            }
-                        }
-                        Text { textFormat: Text.PlainText; text: "Все смещения — с нуля, в байтах. Поля ниже отсчитываются от расшифрованных данных. Manufacturer Data не включает 2 байта Company ID; Service Data — UUID."; color: "#91a2b8"; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-                        SectionLabel { text: "03  /  ПОЛЯ ДАННЫХ" }
-                        Repeater {
-                            model: window.draft.fields || []
-                            Panel {
-                                required property var modelData
-                                required property int index
-                                Layout.fillWidth: true; implicitHeight: fieldGrid.implicitHeight + 28; color: "#101a28"
-                                GridLayout {
-                                    id: fieldGrid; anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 14; columns: 2; columnSpacing: 10; rowSpacing: 10
-                                    FormField { label: "ID поля"; text: modelData.id || ""; Layout.fillWidth: true; onEdited: function(v) { window.patchField(index,"id",v) } }
-                                    FormField { label: "Название"; text: modelData.label || ""; Layout.fillWidth: true; onEdited: function(v) { window.patchField(index,"label",v) } }
-                                    ComboBox { Layout.fillWidth: true; model: ["u8","u16","u32","i16","i32","float32","bcd"]; currentIndex: Math.max(0,model.indexOf(modelData.type)); onActivated: window.patchField(index,"type",currentText); Accessible.name: "Тип данных" }
-                                    ComboBox { Layout.fillWidth: true; model: ["reading","battery","temperature","status","other"]; currentIndex: Math.max(0,model.indexOf(modelData.role)); onActivated: window.patchField(index,"role",currentText); Accessible.name: "Назначение поля" }
-                                    FormField { label: "Смещение"; text: String(modelData.offset); Layout.fillWidth: true; onEdited: function(v) { window.patchField(index,"offset",Number(v)) } }
-                                    FormField { label: "Множитель"; text: String(modelData.scale); Layout.fillWidth: true; onEdited: function(v) { window.patchField(index,"scale",Number(v)) } }
-                                    FormField { label: "Единица измерения"; text: modelData.unit || ""; Layout.fillWidth: true; onEdited: function(v) { window.patchField(index,"unit",v) } }
-                                    ComboBox { Layout.fillWidth: true; model: ["little","big"]; currentIndex: Math.max(0,model.indexOf(modelData.endian)); onActivated: window.patchField(index,"endian",currentText); Accessible.name: "Порядок байтов" }
-                                    FormField { visible: modelData.type === "bcd"; label: "BCD длина (1–6)"; text: String(modelData.length || 1); Layout.fillWidth: true; onEdited: function(v) { window.patchField(index,"length",Number(v)) } }
-                                    Button { text: "Удалить поле"; palette.buttonText: "#ff9b94"; flat: true; onClicked: { let obj = JSON.parse(window.editorText); obj.fields.splice(index,1); window.patch("fields",obj.fields) } }
-                                }
-                            }
-                        }
-                        ActionButton { text: "+ Добавить поле"; secondary: true; onClicked: { let fields = JSON.parse(JSON.stringify(window.draft.fields || [])); fields.push({id:"field"+fields.length,label:"Новое поле",type:"u8",offset:0,endian:"little",scale:1,unit:"",role:"other"}); window.patch("fields",fields) } }
-                    }
-                    TextArea { textFormat: TextEdit.PlainText;
-                        id: jsonEditor; visible: window.jsonMode; Layout.fillWidth: true; implicitHeight: 500
-                        text: window.editorText; color: "#c4e4df"; font.family: "monospace"; font.pixelSize: 12; wrapMode: TextEdit.WrapAnywhere; selectByMouse: true; padding: 14
-                        onTextChanged: if (activeFocus) { window.editorText = text; try { window.draft = JSON.parse(text) } catch(e) {} }
-                        background: Rectangle { color: "#0c1420"; radius: 12; border.color: "#2b3b50" }
-                    }
-                    SectionLabel { text: "04  /  ПРОВЕРКА НА ПАКЕТЕ"; Layout.topMargin: 8 }
-                    FormField { id: testHex; label: "Пакет HEX из раздела «Эфир»"; placeholder: "A1 03 E9 …"; Layout.fillWidth: true }
-                    FormField { id: testKey; label: "Ключ HEX (не сохраняется в протоколе)"; secret: true; Layout.fillWidth: true }
-                    ActionButton { text: "Расшифровать пакет"; secondary: true; onClicked: window.testFeedback = backend.testPacket(window.editorText,testHex.text,testKey.text) }
-                    TextArea { textFormat: TextEdit.PlainText; visible: window.testFeedback.length > 0; text: window.testFeedback; readOnly: true; selectByMouse: true; color: window.testFeedback.indexOf("Ошибка") === 0 ? "#ff9b94" : "#83e4ce"; font.pixelSize: 12; wrapMode: TextEdit.Wrap; Layout.fillWidth: true; background: null }
-                    Item { height: 8 }
-                }
-            }
-            Text { textFormat: Text.PlainText; text: window.editorFeedback; visible: text.length > 0; color: "#f2c27a"; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-            Flow {
-                Layout.fillWidth: true; spacing: 8
-                ActionButton { text: "Сохранить"; onClicked: { if (window.draft.id !== window.editorId && backend.protocolText(window.draft.id || "").length > 0) overwriteConfirm.open(); else window.commitProtocol() } }
-                ActionButton { text: "Проверить"; secondary: true; onClicked: window.editorFeedback = backend.validateProtocol(window.editorText) || "Структура протокола корректна" }
-                ActionButton { text: "Экспорт"; secondary: true; onClicked: protocolExport.open() }
-                ActionButton { visible: window.editorId.length > 0 && window.editorId.indexOf("demo-") !== 0; text: "Удалить"; secondary: true; danger: true; onClicked: deleteConfirm.open() }
-            }
-        }
-        onClosed: { testKey.text = ""; testHex.text = ""; window.testFeedback = "" }
-    }
-    Dialog {
-        id: deleteConfirm; parent: Overlay.overlay; anchors.centerIn: parent; modal: true
-        title: "Удалить протокол?"; standardButtons: Dialog.Yes | Dialog.No
-        onAccepted: { let error = backend.deleteProtocol(window.editorId); if (!error) protocolEditor.close(); window.notify(error,"Протокол удалён") }
-    }
-    Dialog { id: overwriteConfirm; parent: Overlay.overlay; anchors.centerIn: parent; modal: true; title: "Заменить существующий протокол?"; standardButtons: Dialog.Yes | Dialog.No; onAccepted: window.commitProtocol() }
-    FileDialog {
-        id: protocolImport; title: "Импорт протокола"; nameFilters: ["JSON (*.json)"]
-        onAccepted: {
-            let result = backend.readProtocol(selectedFile)
-            if (result.error) { window.notify(result.error, ""); return }
-            window.openEditor(""); window.editorText = result.text; window.draft = JSON.parse(result.text)
-        }
-    }
-    FileDialog { id: protocolExport; title: "Экспорт протокола"; fileMode: FileDialog.SaveFile; nameFilters: ["JSON (*.json)"]; defaultSuffix: "json"; onAccepted: window.notify(backend.exportProtocol(window.editorText,selectedFile),"Протокол экспортирован") }
     FileDialog { id: readingsExport; title: "Экспорт показаний"; fileMode: FileDialog.SaveFile; nameFilters: ["JSON (*.json)"]; defaultSuffix: "json"; onAccepted: window.notify(backend.exportReadings(selectedFile),"Показания экспортированы") }
     Popup {
         id: toast; parent: Overlay.overlay; x: (parent.width-width)/2; y: parent.height-height-92

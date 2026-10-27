@@ -1,24 +1,25 @@
-# Проверки версии 0.1.0
+# Проверки версии 0.1.1
 
 Проверено в облачной среде Debian 13, 27 октября 2026 года.
 
 | Проверка | Результат |
 | --- | --- |
 | Linux Debug, Qt 6.8.2, GCC 14, CMake/Ninja | Сборка выполнена |
-| `ctest --test-dir build --output-on-failure` | 2 набора прошли; 18 тестовых методов, без пропусков |
-| QtTest с init/cleanup | 12 PASS для декодера + 10 PASS для backend, 0 FAIL / 0 SKIP |
+| `ctest --test-dir build --output-on-failure` | 3 набора прошли; 21 тестовый метод, без пропусков |
+| QtTest с init/cleanup | 12 PASS для декодера + 6 PASS для каталога + 9 PASS для backend, 0 FAIL / 0 SKIP |
 | AES-CTR, AES-CBC | Эталонные векторы NIST SP 800-38A |
 | AES-CCM | RFC 3610 vector #1; подмена шифротекста, AAD, тега и ключа отклоняется |
 | Разбор данных | LE/BE, знаковые значения, IEEE-754, BCD, границы и некорректный HEX |
-| Данные приложения | Сохранение и повторная загрузка, импорт/экспорт, запрет конфликтующих протоколов, смена BLE-адреса без дубликата, ограничение буфера |
-| QML без дисплея | Деморежим, 3 успешно расшифрованных прибора, открытие редактора и всех вкладок; без QML warnings |
+| Данные приложения | Сохранение и повторная загрузка показаний, игнорирование внешнего protocols.json, отсутствие методов редактора в QML API, смена BLE-адреса без дубликата, ограничение буфера |
+| QML без дисплея | Деморежим, 3 успешно расшифрованных прибора, открытие обзора/эфира/настроек и проверка отсутствия точки входа редактора; без QML warnings |
+| Настольная утилита разработчика | Проверены каталог, JSON, конфликты prefix, некорректный HEX, эталонный CCM-пакет с ключом из stdin и отказ с неверным ключом; в Android APK утилита не входит |
 | Размеры интерфейса | 420×860 и 1100×860, изображения `mobile.png`, `desktop.png` |
 | Android arm64 | Qt 6.8.3, NDK r27c, SDK/target 35, min 26, JDK 21; native/JNI/Java/resources/Dex/APK собраны |
-| APK | Debug-подпись APK Signature Scheme v2 проверена через `apksigner`; package `org.codapkmeter.app`, version `0.1.0` |
+| APK | Debug-подпись APK Signature Scheme v2 проверена через `apksigner`; package `org.codapkmeter.app`, version `0.1.1`, versionCode `2` |
 | Манифест | Только необходимые BLE/legacy location permissions и служебное разрешение AndroidX; без Internet и broad storage permissions |
 | Повторяемость | Оба bootstrap-скрипта выполнены; повторная сборка использует сохранённые инструменты и кэши |
 
-`initTestCase` и `cleanupTestCase` включены в 22 строки PASS QtTest, но не в 18 тестовых методов.
+`initTestCase` и `cleanupTestCase` включены в 27 строк PASS QtTest, но не в 21 тестовый метод.
 
 Предупреждение BlueZ в облаке ожидаемо: к машине не подключён BLE-адаптер. Не выполнялись приём с настоящего счётчика, установка/запуск APK на телефоне, Android permission dialogs, реальная операция Keystore и Android file picker. Успех кросс-сборки не означает, что эти сценарии испытаны на устройстве. GitHub Actions workflow подготовлен, но в рамках этой работы не запускался.
 

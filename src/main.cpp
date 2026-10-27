@@ -11,7 +11,7 @@ int main(int argc, char *argv[]) {
     QGuiApplication app(argc,argv);
     QCoreApplication::setApplicationName("CodApkMeter");
     QCoreApplication::setOrganizationName("CodApkMeter");
-    QCoreApplication::setApplicationVersion("0.1.0");
+    QCoreApplication::setApplicationVersion(QStringLiteral(METER_APP_VERSION));
     QQuickStyle::setStyle("Basic");
     Backend backend;
     QQmlApplicationEngine engine;
@@ -32,19 +32,19 @@ int main(int argc, char *argv[]) {
             if (engine.rootObjects().isEmpty()) { app.exit(2); return; }
             auto root=engine.rootObjects().first();
             root->setProperty("page",1);
-            QMetaObject::invokeMethod(root,"openEditor",Q_ARG(QVariant,QVariant("demo-water")));
         });
         QTimer::singleShot(1200,&app,[&] {
-            if (engine.rootObjects().isEmpty()) { app.exit(2); return; }
-            auto root=engine.rootObjects().first();
-            auto popup=root->findChild<QObject *>("protocolEditor");
-            if (popup) popup->setProperty("visible",false);
-            root->setProperty("page",2);
+            if (!engine.rootObjects().isEmpty()) engine.rootObjects().first()->setProperty("page",2);
         });
-        QTimer::singleShot(1500,&app,[&] { if (!engine.rootObjects().isEmpty()) engine.rootObjects().first()->setProperty("page",3); });
-        QTimer::singleShot(1800,&app,[&] { if (!engine.rootObjects().isEmpty()) engine.rootObjects().first()->setProperty("page",0); });
+        QTimer::singleShot(1800,&app,[&] {
+            if (!engine.rootObjects().isEmpty()) engine.rootObjects().first()->setProperty("page",0);
+        });
         QTimer::singleShot(2200,&app,[&] {
             bool ok=!engine.rootObjects().isEmpty() && !qmlWarnings;
+            if (ok) {
+                const auto meta=engine.rootObjects().first()->metaObject();
+                ok=meta->indexOfProperty("editorId")<0 && meta->indexOfMethod("openEditor(QVariant)")<0;
+            }
             if (backend.demo()) {
                 ok=ok && backend.meters().size()==3;
                 for (const auto &v : backend.meters()) ok=ok && v.toMap().value("valid").toBool();

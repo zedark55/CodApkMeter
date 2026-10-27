@@ -47,6 +47,6 @@ PY
 source "$project_dir/scripts/cloud-env.sh"
 cd "$project_dir"
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -U FETCHCONTENT_SOURCE_DIR_MBEDTLS
-cmake --build build --target codapkmeter protocol_tests backend_tests --parallel 4
+cmake --build build --target codapkmeter protocol_tests catalog_tests backend_tests --parallel 4
 ctest --test-dir build --output-on-failure
 QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software ./build/codapkmeter --demo --mobile --smoke-test

@@ -1,4 +1,5 @@
 #include "backend.h"
+#include "protocolcatalog.h"
 #include <QCoreApplication>
 #include <QFile>
 #include <QDir>
@@ -99,24 +100,10 @@ QString Backend::keyStorageInfo() const {
 }
 
 void Backend::load() {
-    for (const auto &name : {"demo-water","demo-electricity"}) {
-        QFile file(QString(":/qt/qml/CodApkMeter/protocols/%1.json").arg(name));
-        Protocol p; QString error;
-        if (file.open(QIODevice::ReadOnly) && Protocol::parse(file.readAll(),p,error)) m_protocols.append(p);
-        else storageError="Не удалось загрузить встроенные протоколы: "+error;
-    }
-    QFile file(storage+"/protocols.json");
-    if (file.exists()) {
-        if (!file.open(QIODevice::ReadOnly) || file.size()>4*1024*1024) { storageError="Не удалось прочитать protocols.json"; return; }
-        QJsonParseError e;
-        auto doc=QJsonDocument::fromJson(file.readAll(),&e);
-        if (e.error!=QJsonParseError::NoError || !doc.isArray() || doc.array().size()>100) { storageError="Повреждён protocols.json; файл сохранён для восстановления"; return; }
-        for (const auto &v : doc.array()) {
-            Protocol p; QString error;
-            if (!Protocol::parse(QJsonDocument(v.toObject()).toJson(),p,error) || p.id().startsWith("demo-") || !protocolText(p.id()).isEmpty()) { storageError="Ошибка сохранённого протокола: "+error; return; }
-            m_protocols.append(p);
-        }
-    }
+    QString catalogError;
+    if (!ProtocolCatalog::load(m_protocols,catalogError)) storageError=catalogError;
+    // Legacy protocols.json is intentionally ignored and preserved on disk.
+    // Protocols can now enter the application only through compiled resources.
     QFile metersFile(storage+"/meters.json");
     if (metersFile.exists()) {
         if (!metersFile.open(QIODevice::ReadOnly) || metersFile.size()>8*1024*1024) { storageError="Не удалось прочитать meters.json"; return; }
@@ -125,7 +112,12 @@ void Backend::load() {
         if (e.error!=QJsonParseError::NoError || !doc.isArray() || doc.array().size()>200) { storageError="Повреждён meters.json; файл сохранён для восстановления"; return; }
         for (const auto &v : doc.array()) {
             auto m=v.toObject().toVariantMap();
-            if (!m.value("id").toString().isEmpty() && !m.value("demo").toBool()) m_meters.append(m);
+            if (!m.value("id").toString().isEmpty() && !m.value("demo").toBool()) {
+                bool supported=false;
+                for (const auto &p : m_protocols) if (!p.id().startsWith("demo-") && p.id()==m.value("protocolId").toString()) supported=true;
+                if (!supported) { m["valid"]=false; m["error"]="Протокол прибора не поддерживается этой версией приложения"; }
+                m_meters.append(m);
+            }
         }
     }
 }
@@ -136,13 +128,6 @@ bool Backend::persist() {
     for (const auto &v : m_meters) if (!v.toMap().value("demo").toBool()) real.append(v);
     return writeJson(storage+"/meters.json",QJsonDocument(QJsonArray::fromVariantList(real)));
 }
-bool Backend::writeProtocols(const QVector<Protocol> &items) {
-    if (!storageError.isEmpty()) return false;
-    QJsonArray data;
-    for (const auto &p : items) if (!p.id().startsWith("demo-")) data.append(p.json);
-    return writeJson(storage+"/protocols.json",QJsonDocument(data));
-}
-
 QVariantList Backend::meters() const {
     QVariantList list;
     for (const auto &v : m_meters) {
@@ -156,15 +141,6 @@ QVariantList Backend::meters() const {
     }
     return list;
 }
-QVariantList Backend::protocols() const {
-    QVariantList list;
-    for (const auto &p : m_protocols) list.append(QVariantMap{
-        {"id",p.id()},{"name",p.name()},{"kind",p.json.value("kind").toString()},
-        {"mode",p.json.value("encryption").toObject().value("mode").toString()},
-        {"fields",p.json.value("fields").toArray().size()},{"builtin",p.id().startsWith("demo-")}});
-    return list;
-}
-
 void Backend::setDemo(bool value) {
     if (value==m_demo) return;
     stopScan();
@@ -246,7 +222,7 @@ void Backend::ingest(const QString &source, int company, const QString &service,
     if (m_packetCount<std::numeric_limits<int>::max()) ++m_packetCount;
     QVector<const Protocol *> matches;
     for (const auto &p : m_protocols) {
-        if (p.id().startsWith("demo-") && !m_demo) continue;
+        if (p.id().startsWith("demo-")!=m_demo) continue;
         if (p.matches(source,company,service,packet)) matches.append(&p);
     }
     const Protocol *protocol=matches.size()==1 ? matches.first() : nullptr;
@@ -291,96 +267,6 @@ void Backend::demoTick() {
     for (int i=0;i<3;i++) ingest("manufacturer",65535,{},demoPacket(i,demoCounter),-48-i*9-((demoCounter+i)%7),"DEMO");
 }
 
-QString Backend::protocolText(const QString &id) const {
-    for (const auto &p : m_protocols) if (p.id()==id) return QString::fromUtf8(QJsonDocument(p.json).toJson(QJsonDocument::Indented));
-    return {};
-}
-QString Backend::templateText() const {
-    auto doc=QJsonDocument::fromJson(protocolText("demo-water").toUtf8()).object();
-    doc["id"]="my-meter"; doc["name"]="Мой прибор";
-    return QString::fromUtf8(QJsonDocument(doc).toJson(QJsonDocument::Indented));
-}
-QString Backend::validateProtocol(const QString &text) const {
-    Protocol p; QString error;
-    if (!Protocol::parse(text.toUtf8(),p,error)) return error;
-    if (p.id().startsWith("demo-")) return "Префикс demo- зарезервирован. Создайте копию с другим id.";
-    for (const auto &existing : m_protocols) {
-        if (existing.id()==p.id() || existing.id().startsWith("demo-")) continue;
-        const auto &a=existing.json; const auto &b=p.json;
-        if (a.value("source")!=b.value("source")) continue;
-        if (a.value("source")=="manufacturer" && a.value("companyId")!=b.value("companyId")) continue;
-        if (a.value("source")=="service" && QUuid(a.value("serviceUuid").toString())!=QUuid(b.value("serviceUuid").toString())) continue;
-        QByteArray x,y; Protocol::hex(a.value("prefix").toString(),x); Protocol::hex(b.value("prefix").toString(),y);
-        if (x.startsWith(y) || y.startsWith(x)) return "Пересечение prefix с протоколом «"+existing.name()+"»";
-    }
-    return {};
-}
-QString Backend::saveProtocol(const QString &text) {
-    auto error=validateProtocol(text); if (!error.isEmpty()) return error;
-    Protocol p; Protocol::parse(text.toUtf8(),p,error);
-    auto items=m_protocols;
-    int found=-1;
-    for (int i=0;i<items.size();i++) if (items[i].id()==p.id()) found=i;
-    if (found<0 && items.size()>=102) return "Лимит: 100 пользовательских протоколов";
-    if (found<0) items.append(p); else items[found]=p;
-    if (!writeProtocols(items)) return "Не удалось сохранить протоколы. "+storageError;
-    m_protocols=items; emit protocolsChanged();
-    for (int i=0;i<m_meters.size();i++) {
-        auto m=m_meters[i].toMap();
-        if (m.value("protocolId").toString()!=p.id()) continue;
-        m["history"]=QVariantList(); m["hasReading"]=false; m["fields"]=QVariantList();
-        m["protocolName"]=p.name(); m["kind"]=p.json.value("kind").toString();
-        m["mode"]=p.json.value("encryption").toObject().value("mode").toString();
-        m_meters[i]=m;
-        retryMeter(i);
-    }
-    return {};
-}
-QString Backend::deleteProtocol(const QString &id) {
-    if (id.startsWith("demo-")) return "Встроенные учебные протоколы нельзя удалить";
-    for (const auto &v : m_meters) if (v.toMap().value("protocolId").toString()==id) return "Протокол используется прибором; удаление заблокировано";
-    auto items=m_protocols;
-    for (int i=items.size()-1;i>=0;i--) if (items[i].id()==id) items.remove(i);
-    if (!writeProtocols(items)) return "Не удалось сохранить изменения";
-    m_protocols=items; emit protocolsChanged(); return {};
-}
-QString Backend::path(const QUrl &url) { return url.isLocalFile() ? url.toLocalFile() : url.scheme()=="content" ? url.toString() : QString(); }
-QString Backend::importProtocol(const QUrl &url) {
-    QFile file(path(url));
-    if (!file.open(QIODevice::ReadOnly) || file.size()>65536) return "Файл недоступен или больше 64 КБ";
-    QByteArray data=file.read(65537);
-    Protocol p; QString error;
-    if (!Protocol::parse(data,p,error)) return error;
-    if (!protocolText(p.id()).isEmpty()) return "Этот id уже существует. Откройте файл в редакторе и измените id перед импортом.";
-    return saveProtocol(QString::fromUtf8(data));
-}
-QVariantMap Backend::readProtocol(const QUrl &url) const {
-    QFile file(path(url));
-    if (!file.open(QIODevice::ReadOnly) || file.size()>65536) return {{"error","Файл недоступен или больше 64 КБ"}};
-    Protocol p; QString error;
-    if (!Protocol::parse(file.read(65537),p,error)) return {{"error",error}};
-    return {{"error",""},{"text",QString::fromUtf8(QJsonDocument(p.json).toJson())}};
-}
-QString Backend::exportProtocol(const QString &text, const QUrl &url) {
-    Protocol p; QString error;
-    if (!Protocol::parse(text.toUtf8(),p,error)) return error;
-    return writeSelected(url,QJsonDocument(p.json).toJson()) ? QString() : "Не удалось записать файл";
-}
-QString Backend::testPacket(const QString &text, const QString &hex, const QString &keyHex) const {
-    Protocol p; QString error;
-    if (!Protocol::parse(text.toUtf8(),p,error)) return "Ошибка: "+error;
-    QByteArray packet,key;
-    if (!Protocol::hex(hex,packet) || packet.isEmpty()) return "Ошибка: некорректный HEX пакета";
-    if (!Protocol::hex(keyHex,key)) return "Ошибка: некорректный HEX ключа";
-    if (!p.matches(p.json.value("source").toString(),p.json.value("companyId").toInt(),p.json.value("serviceUuid").toString(),packet)) return "Ошибка: префикс пакета не соответствует протоколу";
-    auto result=p.decode(packet,key);
-    if (!result.ok) return "Ошибка: "+result.error;
-    QStringList lines{"Успешно · ID "+p.identity(packet)};
-    for (const auto &v : result.fields) { auto f=v.toMap(); lines.append(f.value("label").toString()+": "+QString::number(f.value("value").toDouble(),'g',12)+" "+f.value("unit").toString()); }
-    auto mode=p.json.value("encryption").toObject().value("mode").toString();
-    if (mode=="aes-128-ctr" || mode=="aes-128-cbc") lines.append("CTR/CBC не проверяет подлинность: неверный ключ может дать правдоподобные показания.");
-    return lines.join('\n');
-}
 void Backend::retryMeter(int index) {
     auto m=m_meters[index].toMap();
     for (const auto &p : m_protocols) if (p.id()==m.value("protocolId").toString()) {
