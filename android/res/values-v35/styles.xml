@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="MeterTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:colorAccent">#83E4CE</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">#0C1420</item>
+        <item name="android:navigationBarColor">#101A28</item>
+        <item name="android:windowBackground">#0C1420</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+</resources>

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "id": "demo-water",
+  "name": "Aqua · учебный AES-CCM",
+  "kind": "water",
+  "source": "manufacturer",
+  "companyId": 65535,
+  "prefix": "A1",
+  "identity": { "offset": 1, "length": 2 },
+  "encryption": {
+    "mode": "aes-128-ccm", "offset": 10, "length": 7,
+    "nonceOffset": 3, "nonceLength": 7, "tagLength": 4, "aadLength": 10
+  },
+  "fields": [
+    { "id": "total", "label": "Объём", "type": "u32", "offset": 0, "endian": "little", "scale": 0.001, "unit": "м³", "role": "reading" },
+    { "id": "battery", "label": "Батарея", "type": "u8", "offset": 4, "endian": "little", "scale": 1, "unit": "%", "role": "battery" },
+    { "id": "temp", "label": "Температура", "type": "i16", "offset": 5, "endian": "little", "scale": 0.01, "unit": "°C", "role": "temperature" }
+  ]
+}

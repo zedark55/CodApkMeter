@@ -1,0 +1,10 @@
+build*/
+.qtcreator/
+*.user
+.DS_Store
+*.apk
+*.aab
+.cache/
+artifacts/
+__pycache__/
+*.pyc

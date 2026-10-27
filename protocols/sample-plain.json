@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "id": "sample-water",
+  "name": "Учебный открытый счётчик",
+  "kind": "water",
+  "source": "manufacturer",
+  "companyId": 123,
+  "prefix": "B1",
+  "identity": {
+    "offset": 1,
+    "length": 2
+  },
+  "encryption": {
+    "mode": "none",
+    "offset": 3,
+    "length": 7
+  },
+  "fields": [
+    {
+      "id": "total",
+      "label": "Объём",
+      "type": "u32",
+      "offset": 0,
+      "endian": "little",
+      "scale": 0.001,
+      "unit": "м³",
+      "role": "reading"
+    },
+    {
+      "id": "battery",
+      "label": "Батарея",
+      "type": "u8",
+      "offset": 4,
+      "endian": "little",
+      "scale": 1,
+      "unit": "%",
+      "role": "battery"
+    },
+    {
+      "id": "temperature",
+      "label": "Температура",
+      "type": "i16",
+      "offset": 5,
+      "endian": "little",
+      "scale": 0.01,
+      "unit": "°C",
+      "role": "temperature"
+    }
+  ]
+}
