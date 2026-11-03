@@ -9,7 +9,9 @@
 
 int main(int argc, char *argv[]) {
     QGuiApplication app(argc,argv);
+    // Keep the legacy storage identity so installed readings remain available.
     QCoreApplication::setApplicationName("CodApkMeter");
+    QGuiApplication::setApplicationDisplayName("ChronosBluetoothApk");
     QCoreApplication::setOrganizationName("CodApkMeter");
     QCoreApplication::setApplicationVersion(QStringLiteral(METER_APP_VERSION));
     QQuickStyle::setStyle("Basic");
@@ -20,7 +22,7 @@ int main(int argc, char *argv[]) {
     engine.rootContext()->setContextProperty("backend",&backend);
     QObject::connect(&engine,&QQmlApplicationEngine::objectCreationFailed,&app,[] { QCoreApplication::exit(1); },Qt::QueuedConnection);
     QObject::connect(&app,&QGuiApplication::applicationStateChanged,&backend,[&](Qt::ApplicationState state) { backend.applicationActive(state==Qt::ApplicationActive); });
-    engine.loadFromModule("CodApkMeter","Main");
+    engine.loadFromModule("ChronosBluetoothApk","Main");
     if (app.arguments().contains("--mobile") && !engine.rootObjects().isEmpty()) {
         engine.rootObjects().first()->setProperty("width",420);
         engine.rootObjects().first()->setProperty("height",860);

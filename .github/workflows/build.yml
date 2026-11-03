@@ -20,7 +20,7 @@ jobs:
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_PROTOCOL_TOOLS=ON
       - name: Build
-        run: cmake --build build --target codapkmeter protocol_tool protocol_tests catalog_tests backend_tests --parallel 4
+        run: cmake --build build --target ChronosBluetoothApk protocol_tool protocol_tests catalog_tests backend_tests --parallel 4
       - name: Test decoder and persistence
         run: ctest --test-dir build --output-on-failure
       - name: Validate developer protocol workflow
@@ -33,8 +33,8 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
         run: |
-          ./build/codapkmeter --demo --smoke-test
-          ./build/codapkmeter --demo --mobile --smoke-test
+          ./build/ChronosBluetoothApk --demo --smoke-test
+          ./build/ChronosBluetoothApk --demo --mobile --smoke-test
   android:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
@@ -71,6 +71,6 @@ jobs:
         run: cmake --build build-android --target apk --parallel 4
       - uses: actions/upload-artifact@v4
         with:
-          name: CodApkMeter-android-arm64-debug
+          name: ChronosBluetoothApk-android-arm64-debug
           path: build-android/android-build/build/outputs/apk/debug/*.apk
           if-no-files-found: error

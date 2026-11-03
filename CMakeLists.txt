@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(CodApkMeter VERSION 0.1.1 LANGUAGES C CXX)
+project(ChronosBluetoothApk VERSION 0.1.2 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Quick QuickControls2 Bluetooth)
@@ -33,24 +33,25 @@ if(BUILD_PROTOCOL_TOOLS)
     qt_add_executable(protocol_tool tools/protocol_tool.cpp)
     target_link_libraries(protocol_tool PRIVATE metercore)
 endif()
-qt_add_executable(codapkmeter src/main.cpp src/backend.cpp src/backend.h src/keyvault.cpp src/keyvault.h)
-target_link_libraries(codapkmeter PRIVATE metercore mbedcrypto Qt6::Gui Qt6::Quick Qt6::QuickControls2 Qt6::Bluetooth)
-target_compile_definitions(codapkmeter PRIVATE METER_APP_VERSION="${PROJECT_VERSION}")
-qt_add_qml_module(codapkmeter URI CodApkMeter VERSION 1.0
+qt_add_executable(ChronosBluetoothApk src/main.cpp src/backend.cpp src/backend.h src/keyvault.cpp src/keyvault.h)
+target_link_libraries(ChronosBluetoothApk PRIVATE metercore mbedcrypto Qt6::Gui Qt6::Quick Qt6::QuickControls2 Qt6::Bluetooth)
+target_compile_definitions(ChronosBluetoothApk PRIVATE METER_APP_VERSION="${PROJECT_VERSION}")
+qt_add_qml_module(ChronosBluetoothApk URI ChronosBluetoothApk VERSION 1.0
+    OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/qml/ChronosBluetoothApk"
     QML_FILES qml/Main.qml qml/components/Panel.qml qml/components/ActionButton.qml
               qml/components/MetricCard.qml qml/components/SectionLabel.qml qml/components/FormField.qml)
-set_target_properties(codapkmeter PROPERTIES
+set_target_properties(ChronosBluetoothApk PROPERTIES
     QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android"
     QT_ANDROID_PACKAGE_NAME "org.codapkmeter.app"
     QT_ANDROID_MIN_SDK_VERSION 26
     QT_ANDROID_TARGET_SDK_VERSION 35
     QT_ANDROID_VERSION_NAME "${PROJECT_VERSION}"
-    QT_ANDROID_VERSION_CODE 2)
+    QT_ANDROID_VERSION_CODE 3)
 if(ANDROID)
     # New or edited package assets must invalidate the APK, including files
     # absent from androiddeployqt's previous dependency file.
     file(GLOB_RECURSE android_package_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/android/*")
-    set_property(TARGET codapkmeter APPEND PROPERTY LINK_DEPENDS ${android_package_files})
+    set_property(TARGET ChronosBluetoothApk APPEND PROPERTY LINK_DEPENDS ${android_package_files})
 endif()
 
 include(CTest)
@@ -68,4 +69,4 @@ if(BUILD_TESTING AND NOT ANDROID)
     target_compile_definitions(backend_tests PRIVATE PROTOCOL_DIR="${CMAKE_CURRENT_SOURCE_DIR}/protocols")
     add_test(NAME backend COMMAND backend_tests)
 endif()
-install(TARGETS codapkmeter RUNTIME DESTINATION bin LIBRARY DESTINATION lib)
+install(TARGETS ChronosBluetoothApk RUNTIME DESTINATION bin LIBRARY DESTINATION lib)

@@ -1,8 +1,10 @@
-# CodApkMeter
+# ChronosBluetoothApk
 
 Приложение на **Qt 6 / C++17 / QML** для Android: слушает Bluetooth LE advertising без сопряжения и прямого подключения, расшифровывает данные и показывает показания приборов учёта. Интерфейс адаптируется к телефону и настольному окну.
 
-<p><img src="docs/mobile.png" width="300" alt="Телефонный интерфейс CodApkMeter в демонстрационном режиме" /></p>
+<p><img src="docs/mobile.png" width="300" alt="Телефонный интерфейс ChronosBluetoothApk в демонстрационном режиме" /></p>
+
+Android package id `org.codapkmeter.app` и внутренние идентификаторы хранилища сохранены от предыдущей версии для совместимого обновления и доступа к существующим показаниям/ключам. Отображаемое имя, CMake-проект и цель сборки — `ChronosBluetoothApk`. Репозиторий доступен по прежнему адресу GitHub.
 
 ## Что реализовано
 
@@ -25,11 +27,11 @@
 ```bash
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
   -DCMAKE_PREFIX_PATH=/path/to/Qt/6.8.3/gcc_64
-cmake --build build --target codapkmeter protocol_tests catalog_tests backend_tests --parallel 4
+cmake --build build --target ChronosBluetoothApk protocol_tests catalog_tests backend_tests --parallel 4
 ctest --test-dir build --output-on-failure
-./build/codapkmeter --demo
+./build/ChronosBluetoothApk --demo
 # Телефонный размер окна:
-./build/codapkmeter --demo --mobile
+./build/ChronosBluetoothApk --demo --mobile
 ```
 
 На Linux реальное сканирование требует доступного BlueZ/D-Bus и BLE-адаптера. Для демонстрации Bluetooth не нужен.
@@ -40,7 +42,7 @@ ctest --test-dir build --output-on-failure
 bash scripts/bootstrap-cloud.sh
 source scripts/cloud-env.sh
 QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
-  ./build/codapkmeter --demo --mobile --smoke-test
+  ./build/ChronosBluetoothApk --demo --mobile --smoke-test
 ```
 
 Bootstrap предназначен для Debian 13 и устанавливает инструменты в `/workspace`, не меняя системные каталоги. Для окна нужен графический сеанс; `offscreen` используется для проверки без дисплея. Каждая облачная задача уже изолирована: используйте существующий checkout, отдельный Git worktree не требуется.

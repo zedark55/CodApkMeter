@@ -1,4 +1,4 @@
-# Как открыть, изменить и собрать CodApkMeter на чистом компьютере
+# Как открыть, изменить и собрать ChronosBluetoothApk на чистом компьютере
 
 Основной маршрут ниже — **Windows 10/11 x64 + Qt Creator**. Для Linux приведены отдельные замечания в конце. Сам проект и команды CMake общие для обеих систем.
 
@@ -99,8 +99,8 @@ C:\Qt\6.8.3\android_arm64_v8a
 ```powershell
 New-Item -ItemType Directory -Force C:/Dev | Out-Null
 Set-Location C:/Dev
-git clone https://github.com/zedark55/CodApkMeter.git
-Set-Location C:/Dev/CodApkMeter
+git clone https://github.com/zedark55/CodApkMeter.git ChronosBluetoothApk
+Set-Location C:/Dev/ChronosBluetoothApk
 ```
 
 Либо скачайте **Code → Download ZIP** на странице репозитория и распакуйте архив. Git удобнее для последующего получения обновлений и отправки изменений.
@@ -108,7 +108,7 @@ Set-Location C:/Dev/CodApkMeter
 В Qt Creator:
 
 1. **File → Open File or Project**.
-2. Выберите `C:\Dev\CodApkMeter\CMakeLists.txt`.
+2. Выберите `C:\Dev\ChronosBluetoothApk\CMakeLists.txt`.
 3. Выберите **Android Qt 6.8.3 Clang arm64-v8a**.
 4. Нажмите **Configure Project** и дождитесь настройки CMake. При первом запуске загрузится Mbed TLS.
 5. В **Projects → Build → CMake** проверьте параметры Android. Для воспроизведения текущей сборки используются:
@@ -193,7 +193,7 @@ Qt Creator / androiddeployqt выводит фактический путь в �
 
 ```powershell
 & "C:/Android/Sdk/platform-tools/adb.exe" devices
-& "C:/Android/Sdk/platform-tools/adb.exe" install -r "C:/Dev/CodApkMeter/build-android/android-build/build/outputs/apk/debug/android-build-debug.apk"
+& "C:/Android/Sdk/platform-tools/adb.exe" install -r "C:/Dev/ChronosBluetoothApk/build-android/android-build/build/outputs/apk/debug/android-build-debug.apk"
 ```
 
 В списке `adb devices` состояние должно быть `device`, а не `unauthorized`.
@@ -262,7 +262,7 @@ Qt Desktop обычно находится в `~/Qt/6.8.3/gcc_64`; его пут
 
 ## 13. APK через GitHub Actions
 
-Если нужен результат без локальной установки всех Android-инструментов, откройте https://github.com/zedark55/CodApkMeter/actions , выберите **Build and test → Run workflow → main**. После успешного задания `android` скачайте артефакт **CodApkMeter-android-arm64-debug** и распакуйте APK.
+Если нужен результат без локальной установки всех Android-инструментов, откройте https://github.com/zedark55/CodApkMeter/actions , выберите **Build and test → Run workflow → main**. После успешного задания `android` скачайте артефакт **ChronosBluetoothApk-android-arm64-debug** и распакуйте APK.
 
 Этот маршрут использует workflow из репозитория. Его успех смотрите по фактическому статусу задания; наличие workflow не гарантирует успешную сборку. Для редактирования проекта в Qt Creator по-прежнему удобнее локальный набор инструментов.
 

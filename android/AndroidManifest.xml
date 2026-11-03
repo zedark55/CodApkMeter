@@ -15,7 +15,7 @@
     <supports-screens android:anyDensity="true" android:largeScreens="true"
         android:normalScreens="true" android:smallScreens="true" />
     <application android:name="org.qtproject.qt.android.bindings.QtApplication"
-        android:hardwareAccelerated="true" android:label="CodApkMeter"
+        android:hardwareAccelerated="true" android:label="ChronosBluetoothApk"
         android:theme="@style/MeterTheme" android:icon="@drawable/ic_launcher"
         android:allowBackup="false" android:fullBackupContent="false"
         android:usesCleartextTraffic="false">
