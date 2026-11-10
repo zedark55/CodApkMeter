@@ -11,7 +11,7 @@ int main(int argc, char *argv[]) {
     QGuiApplication app(argc,argv);
     // Keep the legacy storage identity so installed readings remain available.
     QCoreApplication::setApplicationName("CodApkMeter");
-    QGuiApplication::setApplicationDisplayName("ChronosBluetoothApk");
+    QGuiApplication::setApplicationDisplayName(QStringLiteral("Хронос"));
     QCoreApplication::setOrganizationName("CodApkMeter");
     QCoreApplication::setApplicationVersion(QStringLiteral(METER_APP_VERSION));
     QQuickStyle::setStyle("Basic");

@@ -11,7 +11,7 @@ ApplicationWindow {
     minimumWidth: 360
     minimumHeight: 640
     visible: true
-    title: "ChronosBluetoothApk · Приборы учёта"
+    title: "Хронос · Приборы учёта"
     color: "#0c1420"
     font.family: "Sans Serif"
     palette.window: "#0c1420"
@@ -68,7 +68,7 @@ ApplicationWindow {
             Item { Layout.fillHeight: true }
             Rectangle { Layout.fillWidth: true; height: 1; color: "#263345" }
             Text { textFormat: Text.PlainText; text: "Ближе к данным."; color: "#b8c8da"; font.pixelSize: 12; Layout.topMargin: 14 }
-            Text { textFormat: Text.PlainText; text: "ChronosBluetoothApk / " + Qt.application.version; color: "#63758e"; font.pixelSize: 10 }
+            Text { textFormat: Text.PlainText; text: "Хронос / " + Qt.application.version; color: "#63758e"; font.pixelSize: 10 }
         }
     }
 
@@ -225,7 +225,7 @@ ApplicationWindow {
                     Text { textFormat: Text.PlainText; text: "Ключ задаётся отдельно в карточке каждого прибора. Экспорт показаний не содержит ключей. Данные не отправляются на сервер."; color: "#91a2b8"; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.WordWrap; lineHeight: 1.5 }
                     SectionLabel { text: "КАК РАБОТАЕТ ПРИЁМ"; Layout.topMargin: 8 }
                     Text { textFormat: Text.PlainText; text: "Приложение слушает Bluetooth LE advertising. Прямое соединение и сопряжение не нужны. При сворачивании приём приостанавливается и возобновляется после возврата.\n\nAndroid 12+ запрашивает доступ к устройствам поблизости. Android 8–11 требует разрешение и включённую геолокацию.\n\nQt может объединять повторные advertising-пакеты и scan response. Счётчик событий не равен числу радиопакетов.\n\nСовместимость с реальными моделями требует документации производителя и проверки на телефоне. Произвольный зашифрованный пакет нельзя расшифровать без правильного формата и ключа."; color: "#91a2b8"; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.WordWrap; lineHeight: 1.6 }
-                    Text { textFormat: Text.PlainText; text: "ChronosBluetoothApk " + Qt.application.version + "\nQt 6 / C++ / QML"; color: "#63758e"; font.pixelSize: 11; lineHeight: 1.6; Layout.topMargin: 20 }
+                    Text { textFormat: Text.PlainText; text: "Хронос " + Qt.application.version + "\nQt 6 / C++ / QML"; color: "#63758e"; font.pixelSize: 11; lineHeight: 1.6; Layout.topMargin: 20 }
                 }
             }
         }
