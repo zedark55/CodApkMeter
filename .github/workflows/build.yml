@@ -20,14 +20,15 @@ jobs:
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_PROTOCOL_TOOLS=ON
       - name: Build
-        run: cmake --build build --target ChronosBluetoothApk protocol_tool protocol_tests catalog_tests backend_tests --parallel 4
+        run: cmake --build build --target ChronosBluetoothApk protocol_tool protocol_tests catalog_tests backend_tests eto_tests eto_ui_tests --parallel 4
       - name: Test decoder and persistence
         run: ctest --test-dir build --output-on-failure
       - name: Validate developer protocol workflow
         run: |
           ./build/protocol_tool catalog
-          ./build/protocol_tool validate protocols/demo-water.json protocols/demo-electricity.json protocols/sample-plain.json
+          ./build/protocol_tool validate protocols/demo-water.json protocols/demo-electricity.json protocols/sample-plain.json protocols/eto-water-v2.json
           ./build/protocol_tool test protocols/sample-plain.json 'B1 03 E9 40 E2 01 00 5E FB FF'
+          ./build/protocol_tool test protocols/eto-water-v2.json '64 78 56 34 12 06 05 F1 CA E1 6A 40 E2 01 00 DB 03 00 00 02 00 37 01 5A 1B E8 03'
       - name: Exercise desktop and phone layouts
         env:
           QT_QPA_PLATFORM: offscreen

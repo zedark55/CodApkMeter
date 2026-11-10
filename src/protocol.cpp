@@ -1,4 +1,5 @@
 #include "protocol.h"
+#include "etowater.h"
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QRegularExpression>
@@ -49,6 +50,12 @@ bool Protocol::parse(const QByteArray &data, Protocol &out, QString &error) {
     if (source != "manufacturer" && source != "service") return fail("source: manufacturer или service");
     if (source == "manufacturer" && !integer(o.value("companyId"), 0, 65535)) return fail("companyId: целое число 0–65535");
     if (source == "service" && QUuid(o.value("serviceUuid").toString()).isNull()) return fail("Укажите полный serviceUuid");
+    if (o.contains("decoder")) {
+        if (o.value("decoder").toString()!="eto-water-v2") return fail("Неизвестный встроенный decoder");
+        if (source!="manufacturer" || o.value("companyId").toInt()!=5775 || o.value("kind").toString()!="water"
+            || o.value("encryption").toObject().value("mode").toString()!="none") return fail("ЭТО revision 2: manufacturer 5775, water, mode none");
+        out.json=o; error.clear(); return true;
+    }
     QByteArray prefix;
     if (!hex(o.value("prefix").toString(), prefix) || prefix.isEmpty()) return fail("Нужен непустой HEX prefix для однозначного выбора протокола");
     const auto identity = o.value("identity").toObject();
@@ -89,16 +96,19 @@ bool Protocol::matches(const QString &source, int company, const QString &servic
     if (json.value("source").toString() != source) return false;
     if (source == "manufacturer" && json.value("companyId").toInt() != company) return false;
     if (source == "service" && QUuid(json.value("serviceUuid").toString()) != QUuid(service)) return false;
+    if (json.value("decoder")=="eto-water-v2") return EtoWater::matches(packet);
     return packet.startsWith(QByteArray::fromHex(json.value("prefix").toString().remove(QRegularExpression("\\s")).toLatin1()));
 }
 
 QString Protocol::identity(const QByteArray &packet) const {
+    if (json.value("decoder")=="eto-water-v2") return EtoWater::identity(packet);
     auto i = json.value("identity").toObject();
     int offset = i.value("offset").toInt(), size = i.value("length").toInt();
     return fits(offset,size,packet.size()) ? QString::fromLatin1(packet.mid(offset,size).toHex()).toUpper() : QString();
 }
 
 DecodeResult Protocol::decode(const QByteArray &packet, const QByteArray &key) const {
+    if (json.value("decoder")=="eto-water-v2") return EtoWater::decode(packet);
     DecodeResult result;
     auto fail = [&](const QString &message) { result.error = message; return result; };
     if (packet.size()>1650 || identity(packet).isEmpty()) return fail("Пакет слишком короткий или больше 1650 байт");

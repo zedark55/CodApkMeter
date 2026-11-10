@@ -47,8 +47,9 @@ int main(int argc,char *argv[]) {
     auto result=p.decode(packet,key);
     if (!result.ok) return fail(result.error);
     output<<"ID: "<<p.identity(packet)<<Qt::endl;
+    if (result.archived) output<<"Packet: archive (does not replace live reading)"<<Qt::endl;
     for (const auto &v : result.fields) {
-        auto f=v.toMap(); output<<f.value("label").toString()<<": "<<QString::number(f.value("value").toDouble(),'g',12)<<" "<<f.value("unit").toString()<<Qt::endl;
+        auto f=v.toMap(); output<<f.value("label").toString()<<": "<<(f.contains("text") ? f.value("text").toString() : QString::number(f.value("value").toDouble(),'g',12)+" "+f.value("unit").toString())<<Qt::endl;
     }
     if (mode=="aes-128-ctr" || mode=="aes-128-cbc") error<<"CTR/CBC does not authenticate the packet or verify the key.\n";
     return 0;

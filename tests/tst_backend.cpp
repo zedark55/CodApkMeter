@@ -6,6 +6,7 @@
 #include <QTemporaryDir>
 #include <QFile>
 #include <QtTest>
+#include <QtEndian>
 
 class BackendTests : public QObject {
     Q_OBJECT
@@ -113,6 +114,63 @@ private slots:
         QFile file(path); QVERIFY(file.open(QIODevice::ReadOnly));
         auto data=file.readAll(); QVERIFY(!data.contains("packet")); QVERIFY(!data.contains("0011223344556677"));
         QCOMPARE(QJsonDocument::fromJson(data).object()["meters"].toArray().size(),1);
+    }
+    void etoArchivesDoNotReplaceLiveReading() {
+        const auto live=QByteArray::fromHex("64785634120605f1cae16a40e20100db030000020037015a1be803");
+        auto archive=QByteArray::fromHex("64785634120605a0e6e06a40e20100db030000c00001");
+        {
+            Backend b; b.ingest("manufacturer",5775,{},live,-60,"one");
+            QCOMPARE(b.meters().size(),1);
+            const auto current=b.meters().first().toMap();
+            QCOMPARE(current.value("reading").toDouble(),12.3456);
+            QCOMPARE(current.value("serial").toString(),QString("12345678"));
+            QCOMPARE(current.value("readingDecimals").toInt(),4);
+            b.ingest("manufacturer",5775,{},archive,-61,"rotated");
+            b.ingest("manufacturer",5775,{},archive,-62,"rotated-again");
+            auto m=b.meters().first().toMap();
+            QCOMPARE(b.meters().size(),1); QCOMPARE(m.value("archives").toList().size(),1);
+            QCOMPARE(m.value("reading"),current.value("reading"));
+            QCOMPARE(m.value("lastReadingAt"),current.value("lastReadingAt"));
+            QCOMPARE(m.value("fields"),current.value("fields")); QCOMPARE(m.value("history"),current.value("history"));
+            // An older live sample must not roll the current counter back either.
+            auto old=live; qToLittleEndian<quint32>(1,old.data()+7); qToLittleEndian<quint32>(5,old.data()+11);
+            b.ingest("manufacturer",5775,{},old,-63,{});
+            QCOMPARE(b.meters().first().toMap().value("reading"),current.value("reading"));
+        }
+        Backend restored; QCOMPARE(restored.meters().size(),1);
+        auto m=restored.meters().first().toMap(); QVERIFY(m.value("valid").toBool());
+        QCOMPARE(m.value("reading").toDouble(),12.3456); QCOMPARE(m.value("archives").toList().size(),1);
+        restored.ingest("manufacturer",5775,{},archive,-63,{});
+        QCOMPARE(restored.meters().first().toMap().value("archives").toList().size(),1);
+        const auto file=QUrl::fromLocalFile(temp.filePath("eto-export.json"));
+        QCOMPARE(restored.exportReadings(file),QString());
+        QFile out(file.toLocalFile()); QVERIFY(out.open(QIODevice::ReadOnly));
+        auto doc=QJsonDocument::fromJson(out.readAll());
+        QCOMPARE(doc.object()["meters"].toArray().first().toObject()["archives"].toArray().size(),1);
+    }
+    void etoArchiveOnlyAndRetention() {
+        auto archive=QByteArray::fromHex("64785634120605a0e6e06a40e20100db030000c00001");
+        Backend b;
+        for (quint32 i=0;i<51;i++) {
+            qToLittleEndian<quint32>(1000+i,archive.data()+7);
+            b.ingest("manufacturer",5775,{},archive,-60,{});
+        }
+        auto m=b.meters().first().toMap();
+        QVERIFY(!m.value("hasReading").toBool()); QVERIFY(!m.contains("reading"));
+        QCOMPARE(m.value("history").toList().size(),0); QCOMPARE(m.value("archives").toList().size(),48);
+        QCOMPARE(m.value("archives").toList().first().toMap().value("timestamp").toLongLong(),1050LL);
+        QCOMPARE(m.value("archives").toList().last().toMap().value("timestamp").toLongLong(),1003LL);
+    }
+    void malformedEtoDoesNotCreateOrCorruptMeter() {
+        auto good=QByteArray::fromHex("64785634120605f1cae16a40e20100db030000020037015a1be803");
+        auto bad=good; bad[23]=char(101);
+        Backend b; b.ingest("manufacturer",5775,{},bad,-60,{}); QVERIFY(b.meters().isEmpty());
+        b.ingest("manufacturer",5775,{},good,-60,{});
+        auto before=b.meters().first().toMap();
+        b.ingest("manufacturer",5775,{},bad,-60,{});
+        auto after=b.meters().first().toMap();
+        QCOMPARE(after.value("serial"),before.value("serial")); QCOMPARE(after.value("reading"),before.value("reading"));
+        QCOMPARE(after.value("fields"),before.value("fields")); QVERIFY(!after.value("valid").toBool());
     }
     void captureBufferIsBounded() {
         Backend b;

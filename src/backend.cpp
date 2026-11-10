@@ -7,6 +7,7 @@
 #include <QJsonDocument>
 #include <QSaveFile>
 #include <QStandardPaths>
+#include <QTimeZone>
 #include <QBluetoothPermission>
 #include <QLocationPermission>
 #include <QPermissions>
@@ -14,6 +15,7 @@
 #include <QtEndian>
 #include <mbedtls/ccm.h>
 #include <limits>
+#include <algorithm>
 #ifdef Q_OS_ANDROID
 #include <QOperatingSystemVersion>
 #endif
@@ -106,7 +108,7 @@ void Backend::load() {
     // Protocols can now enter the application only through compiled resources.
     QFile metersFile(storage+"/meters.json");
     if (metersFile.exists()) {
-        if (!metersFile.open(QIODevice::ReadOnly) || metersFile.size()>8*1024*1024) { storageError="Не удалось прочитать meters.json"; return; }
+        if (!metersFile.open(QIODevice::ReadOnly) || metersFile.size()>32*1024*1024) { storageError="Не удалось прочитать meters.json"; return; }
         QJsonParseError e;
         auto doc=QJsonDocument::fromJson(metersFile.readAll(),&e);
         if (e.error!=QJsonParseError::NoError || !doc.isArray() || doc.array().size()>200) { storageError="Повреждён meters.json; файл сохранён для восстановления"; return; }
@@ -238,25 +240,65 @@ void Backend::ingest(const QString &source, int company, const QString &service,
     auto id=(m_demo ? "demo/" : "real/")+protocol->id()+"/"+serial;
     auto result=protocol->decode(packet,m_demo ? demoKey : vault.get(id));
     int index=meterIndex(id);
+    if (!result.ok && index<0 && protocol->json.value("decoder")=="eto-water-v2") { emit changed(); return; }
     if (index<0 && m_meters.size()>=200) { setStatus("Достигнут лимит: 200 приборов"); emit changed(); return; }
     QVariantMap meter=index<0 ? QVariantMap() : m_meters[index].toMap();
-    if (meter.isEmpty()) meter={{"id",id},{"name",m_demo ? (serial=="03E9" ? "Холодная вода" : serial=="03EA" ? "Горячая вода" : "Электричество") : protocol->name()+" · "+serial},{"history",QVariantList()},{"hasReading",false}};
-    meter["serial"]=serial;
+    const QString displaySerial=result.metadata.value("serial",meter.value("serial",serial)).toString();
+    const QString modelName=result.metadata.value("modelName",protocol->name()).toString();
+    if (meter.isEmpty()) meter={{"id",id},{"name",m_demo ? (serial=="03E9" ? "Холодная вода" : serial=="03EA" ? "Горячая вода" : "Электричество") : modelName+" · "+displaySerial},
+        {"history",QVariantList()},{"archives",QVariantList()},{"hasReading",false},{"battery",-1}};
+    meter["serial"]=displaySerial;
     meter["protocolId"]=protocol->id(); meter["protocolName"]=protocol->name();
     meter["kind"]=protocol->json.value("kind").toString();
     meter["mode"]=protocol->json.value("encryption").toObject().value("mode").toString();
     meter["demo"]=m_demo; meter["lastSeen"]=when(); meter["rssi"]=rssi;
     meter["packet"]=QString::fromLatin1(packet.toHex());
-    meter["error"]=result.error;
-    meter["valid"]=result.ok;
+    meter["error"]=result.error; meter["valid"]=result.ok;
     if (result.ok) {
-        meter["hasReading"]=true; meter["reading"]=result.reading; meter["unit"]=result.unit;
-        meter["fields"]=result.fields; meter["battery"]=result.battery; meter["lastReadingAt"]=when();
-        auto history=meter.value("history").toList();
-        // Avoid duplicate samples emitted by RSSI-only updates from Qt discovery.
-        if (history.isEmpty() || history.last().toMap().value("value").toDouble()!=result.reading) history.append(QVariantMap{{"time",when()},{"value",result.reading}});
-        while (history.size()>80) history.removeFirst();
-        meter["history"]=history;
+        if (result.metadata.contains("modelName")) {
+            meter["modelName"]=modelName;
+            meter["readingDecimals"]=result.metadata.value("readingDecimals");
+            meter["unit"]=result.unit;
+        }
+        if (result.archived) {
+            QVariantMap archive{{"timestamp",result.metadata.value("deviceTimestamp")},
+                {"time",result.metadata.value("deviceTime")},{"type",result.metadata.value("archiveType")},
+                {"typeName",result.metadata.value("archiveTypeName")},{"reading",result.reading},
+                {"reverse",result.metadata.value("reverse")},{"statusCode",result.metadata.value("statusCode")},
+                {"statusText",result.metadata.value("statusText")},{"decimals",result.metadata.value("readingDecimals")}};
+            auto archives=meter.value("archives").toList();
+            bool replaced=false;
+            for (int i=0;i<archives.size();i++) {
+                const auto old=archives[i].toMap();
+                if (old.value("timestamp")==archive.value("timestamp") && old.value("type")==archive.value("type")) {
+                    archives[i]=archive; replaced=true; break;
+                }
+            }
+            if (!replaced) archives.append(archive);
+            std::sort(archives.begin(),archives.end(),[](const QVariant &a,const QVariant &b) {
+                const auto x=a.toMap(),y=b.toMap();
+                if (x.value("timestamp").toLongLong()!=y.value("timestamp").toLongLong()) return x.value("timestamp").toLongLong()>y.value("timestamp").toLongLong();
+                return x.value("type").toInt()<y.value("type").toInt();
+            });
+            while (archives.size()>48) archives.removeLast();
+            meter["archives"]=archives;
+            if (!meter.value("hasReading").toBool()) meter["fields"]=result.fields;
+        } else {
+            const bool ordered=!result.metadata.contains("deviceTimestamp") || !meter.contains("deviceTimestamp")
+                || result.metadata.value("deviceTimestamp").toLongLong()>=meter.value("deviceTimestamp").toLongLong();
+            if (ordered) {
+                meter["hasReading"]=true; meter["reading"]=result.reading; meter["unit"]=result.unit;
+                meter["fields"]=result.fields; meter["battery"]=result.battery;
+                QString measuredAt=when();
+                if (result.metadata.contains("deviceTimestamp")) measuredAt=QDateTime::fromSecsSinceEpoch(result.metadata.value("deviceTimestamp").toLongLong(),QTimeZone::UTC).toString(Qt::ISODateWithMs);
+                meter["lastReadingAt"]=measuredAt;
+                for (auto it=result.metadata.cbegin();it!=result.metadata.cend();++it) meter[it.key()]=it.value();
+                auto history=meter.value("history").toList();
+                if (history.isEmpty() || history.last().toMap().value("value").toDouble()!=result.reading) history.append(QVariantMap{{"time",measuredAt},{"value",result.reading}});
+                while (history.size()>80) history.removeFirst();
+                meter["history"]=history;
+            }
+        }
     }
     if (index<0) m_meters.append(meter); else m_meters[index]=meter;
     if (!m_demo) { dirty=true; if (!saveTimer.isActive()) saveTimer.start(); }
@@ -271,6 +313,7 @@ void Backend::retryMeter(int index) {
     auto m=m_meters[index].toMap();
     for (const auto &p : m_protocols) if (p.id()==m.value("protocolId").toString()) {
         auto result=p.decode(QByteArray::fromHex(m.value("packet").toString().toLatin1()),vault.get(m.value("id").toString()));
+        if (result.archived) return;
         m["valid"]=result.ok; m["error"]=result.error;
         if (result.ok) {
             m["hasReading"]=true; m["reading"]=result.reading; m["unit"]=result.unit; m["fields"]=result.fields; m["battery"]=result.battery;

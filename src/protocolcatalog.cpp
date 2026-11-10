@@ -1,4 +1,5 @@
 #include "protocolcatalog.h"
+#include "etowater.h"
 #include <QDir>
 #include <QFile>
 #include <QResource>
@@ -20,6 +21,13 @@ bool ProtocolCatalog::validate(const QVector<Protocol> &items, QString &error) {
             if (a.value("source")=="manufacturer" && a.value("companyId")!=b.value("companyId")) continue;
             if (a.value("source")=="service" && QUuid(a.value("serviceUuid").toString())!=QUuid(b.value("serviceUuid").toString())) continue;
             QByteArray x,y; Protocol::hex(a.value("prefix").toString(),x); Protocol::hex(b.value("prefix").toString(),y);
+            const bool nativeA=a.value("decoder")=="eto-water-v2",nativeB=b.value("decoder")=="eto-water-v2";
+            if (nativeA || nativeB) {
+                if ((nativeA && nativeB) || EtoWater::matches(nativeA ? y : x)) {
+                    error="Пересечение с моделями ЭТО: "+p.id()+" / "+other.id(); return false;
+                }
+                continue;
+            }
             if (x.startsWith(y) || y.startsWith(x)) {
                 error="Пересечение prefix: "+p.id()+" / "+other.id(); return false;
             }

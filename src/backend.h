@@ -42,6 +42,7 @@ signals:
     void capturesChanged();
 private:
     friend class BackendTests;
+    friend class EtoUiTests;
     QBluetoothDeviceDiscoveryAgent agent;
     QTimer demoTimer;
     QTimer ageTimer;

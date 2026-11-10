@@ -7,6 +7,8 @@
 struct DecodeResult {
     bool ok = false;
     QString error;
+    bool archived = false;
+    QVariantMap metadata;
     QVariantList fields;
     double reading = 0;
     QString unit;

@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "id": "eto-water-v2",
+  "name": "ЭТО · Протей / СВЭУ · редакция 2",
+  "kind": "water",
+  "source": "manufacturer",
+  "companyId": 5775,
+  "decoder": "eto-water-v2",
+  "encryption": { "mode": "none" }
+}

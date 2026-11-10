@@ -24,13 +24,13 @@ Panel {
         Text { textFormat: Text.PlainText; text: card.meter.name; Layout.fillWidth: true; elide: Text.ElideRight; color: "#dce5f2"; font.pixelSize: 15; font.weight: Font.Medium }
         RowLayout {
             spacing: 8
-            Text { textFormat: Text.PlainText; text: card.meter.hasReading ? Number(card.meter.reading).toLocaleString(Qt.locale("ru_RU"),'f',card.meter.kind === "electricity" ? 2 : 3) : "—"; color: "#f1f6ff"; font.pixelSize: 34; font.weight: Font.DemiBold; font.letterSpacing: -1 }
+            Text { textFormat: Text.PlainText; text: card.meter.hasReading ? Number(card.meter.reading).toLocaleString(Qt.locale("ru_RU"),'f',card.meter.readingDecimals === undefined ? (card.meter.kind === "electricity" ? 2 : 3) : card.meter.readingDecimals) : "—"; color: "#f1f6ff"; font.pixelSize: 34; font.weight: Font.DemiBold; font.letterSpacing: -1 }
             Text { textFormat: Text.PlainText; text: card.meter.unit || ""; color: "#91a2b8"; font.pixelSize: 14; Layout.alignment: Qt.AlignBottom; bottomPadding: 6 }
         }
         Rectangle { Layout.fillWidth: true; height: 1; color: "#263345" }
         RowLayout {
             Layout.fillWidth: true
-            Text { textFormat: Text.PlainText; text: card.meter.valid ? "Батарея " + (card.meter.battery >= 0 ? card.meter.battery + "%" : "—") : "Нужен ключ / проверьте пакет"; color: card.meter.valid ? "#91a2b8" : "#f2c27a"; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
+            Text { textFormat: Text.PlainText; text: card.meter.valid && !card.meter.hasReading ? "Получен архив · текущих данных нет" : card.meter.valid ? "Батарея " + (card.meter.battery >= 0 ? card.meter.battery + "%" : "—") : "Ошибка пакета / проверьте ключ"; color: card.meter.valid ? "#91a2b8" : "#f2c27a"; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
             Text { textFormat: Text.PlainText; text: card.meter.rssi + " dBm   ↗"; color: "#91a2b8"; font.pixelSize: 11 }
         }
     }

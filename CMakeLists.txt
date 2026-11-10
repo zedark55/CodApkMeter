@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(ChronosBluetoothApk VERSION 0.1.2 LANGUAGES C CXX)
+project(ChronosBluetoothApk VERSION 0.1.3 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Quick QuickControls2 Bluetooth)
@@ -15,7 +15,7 @@ FetchContent_Declare(mbedtls
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
 FetchContent_MakeAvailable(mbedtls)
 
-qt_add_library(metercore STATIC src/protocol.cpp src/protocol.h src/protocolcatalog.cpp src/protocolcatalog.h)
+qt_add_library(metercore STATIC src/protocol.cpp src/protocol.h src/protocolcatalog.cpp src/protocolcatalog.h src/etowater.cpp src/etowater.h)
 target_link_libraries(metercore PUBLIC Qt6::Core PRIVATE mbedcrypto)
 target_include_directories(metercore PUBLIC src)
 # Developer-maintained catalog. Only these source files are compiled into the
@@ -23,6 +23,7 @@ target_include_directories(metercore PUBLIC src)
 set(METER_PROTOCOL_FILES
     protocols/demo-water.json
     protocols/demo-electricity.json
+    protocols/eto-water-v2.json
 )
 qt_add_resources(metercore "bundled_protocols" PREFIX "/meter" FILES ${METER_PROTOCOL_FILES})
 option(BUILD_PROTOCOL_TOOLS "Build the desktop developer protocol checker" OFF)
@@ -46,7 +47,7 @@ set_target_properties(ChronosBluetoothApk PROPERTIES
     QT_ANDROID_MIN_SDK_VERSION 26
     QT_ANDROID_TARGET_SDK_VERSION 35
     QT_ANDROID_VERSION_NAME "${PROJECT_VERSION}"
-    QT_ANDROID_VERSION_CODE 3)
+    QT_ANDROID_VERSION_CODE 4)
 if(ANDROID)
     # New or edited package assets must invalidate the APK, including files
     # absent from androiddeployqt's previous dependency file.
@@ -61,6 +62,14 @@ if(BUILD_TESTING AND NOT ANDROID)
     target_link_libraries(protocol_tests PRIVATE metercore Qt6::Test mbedcrypto)
     target_compile_definitions(protocol_tests PRIVATE PROTOCOL_DIR="${CMAKE_CURRENT_SOURCE_DIR}/protocols")
     add_test(NAME protocols COMMAND protocol_tests)
+    qt_add_executable(eto_tests tests/tst_etowater.cpp)
+    target_link_libraries(eto_tests PRIVATE metercore Qt6::Test)
+    add_test(NAME eto_water COMMAND eto_tests)
+    qt_add_executable(eto_ui_tests tests/tst_eto_ui.cpp src/backend.cpp src/backend.h src/keyvault.cpp src/keyvault.h)
+    target_link_libraries(eto_ui_tests PRIVATE metercore mbedcrypto Qt6::Test Qt6::Quick Qt6::QuickControls2 Qt6::Bluetooth)
+    target_compile_definitions(eto_ui_tests PRIVATE PROJECT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME eto_ui COMMAND eto_ui_tests)
+    set_tests_properties(eto_ui PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
     qt_add_executable(catalog_tests tests/tst_catalog.cpp)
     target_link_libraries(catalog_tests PRIVATE metercore Qt6::Test)
     add_test(NAME catalog COMMAND catalog_tests)

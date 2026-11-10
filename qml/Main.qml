@@ -257,7 +257,7 @@ ApplicationWindow {
     }
 
     Popup {
-        id: meterDialog; parent: Overlay.overlay; anchors.centerIn: parent
+        id: meterDialog; objectName: "meterDialog"; parent: Overlay.overlay; anchors.centerIn: parent
         width: Math.min(window.width - 24, 530); height: Math.min(window.height - 32, 760)
         modal: true; padding: 24
         background: Panel { color: "#141e2c" }
@@ -273,8 +273,8 @@ ApplicationWindow {
                 }
                 Text { textFormat: Text.PlainText; text: window.selected.name || ""; color: "#f1f6ff"; font.pixelSize: 25; font.weight: Font.DemiBold; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 Text { textFormat: Text.PlainText; text: "ID " + (window.selected.serial || "") + "  ·  " + (window.selected.protocolName || ""); color: "#91a2b8"; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-                Text { textFormat: Text.PlainText; text: window.selected.hasReading ? Number(window.selected.reading).toLocaleString(Qt.locale("ru_RU"),'f',3) + " " + window.selected.unit : "Нет показаний"; color: "#83e4ce"; font.pixelSize: 32; font.weight: Font.DemiBold; Layout.fillWidth: true; wrapMode: Text.WordWrap }
-                Text { textFormat: Text.PlainText; text: (window.selected.valid ? "Принято: " : "Последний успешный приём: ") + (window.selected.lastReadingAt || "—"); color: "#91a2b8"; font.pixelSize: 10; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                Text { textFormat: Text.PlainText; text: window.selected.hasReading ? Number(window.selected.reading).toLocaleString(Qt.locale("ru_RU"),'f',window.selected.readingDecimals === undefined ? 3 : window.selected.readingDecimals) + " " + window.selected.unit : "Нет показаний"; color: "#83e4ce"; font.pixelSize: 32; font.weight: Font.DemiBold; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                Text { textFormat: Text.PlainText; text: (window.selected.valid ? "Принято: " : "Последний успешный приём: ") + (window.selected.deviceTime || window.selected.lastReadingAt || "—"); color: "#91a2b8"; font.pixelSize: 10; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 Text { textFormat: Text.PlainText; visible: window.selected.error !== ""; text: window.selected.error || ""; color: "#f2c27a"; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 SectionLabel { text: "ИСТОРИЯ ПОКАЗАНИЙ" }
                 Canvas {
@@ -300,17 +300,29 @@ ApplicationWindow {
                     RowLayout {
                         required property var modelData
                         Layout.fillWidth: true
-                        Text { textFormat: Text.PlainText; text: modelData.label; color: "#91a2b8"; font.pixelSize: 12; Layout.fillWidth: true }
-                        Text { textFormat: Text.PlainText; text: Number(modelData.value).toLocaleString(Qt.locale("ru_RU"),'f',2) + " " + modelData.unit; color: "#e8eef7"; font.pixelSize: 13 }
+                        Text { textFormat: Text.PlainText; text: modelData.label; color: "#91a2b8"; font.pixelSize: 12; Layout.preferredWidth: detailScroll.availableWidth * 0.42; wrapMode: Text.WordWrap }
+                        Text { textFormat: Text.PlainText; text: modelData.text === undefined ? Number(modelData.value).toLocaleString(Qt.locale("ru_RU"),'f',modelData.decimals === undefined ? 2 : modelData.decimals) + " " + modelData.unit : modelData.text; color: "#e8eef7"; font.pixelSize: 13; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight; wrapMode: Text.WordWrap }
                     }
                 }
                 Text { textFormat: Text.PlainText; visible: ["aes-128-ctr","aes-128-cbc"].indexOf(window.selected.mode) >= 0; text: "AES-CTR/CBC не проверяет подлинность пакета. Неверный ключ может дать правдоподобные показания."; color: "#f2c27a"; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 11 }
+                SectionLabel { visible: (window.selected.archives || []).length > 0; text: "АРХИВ ПРИБОРА" }
+                Repeater {
+                    model: window.selected.archives || []
+                    ColumnLayout {
+                        required property var modelData
+                        Layout.fillWidth: true; spacing: 5
+                        Text { textFormat: Text.PlainText; text: modelData.typeName + " · " + modelData.time; color: "#91a2b8"; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                        Text { textFormat: Text.PlainText; text: Number(modelData.reading).toLocaleString(Qt.locale("ru_RU"),'f',modelData.decimals) + " м³ · обратно " + Number(modelData.reverse).toLocaleString(Qt.locale("ru_RU"),'f',modelData.decimals) + " м³"; color: "#e8eef7"; font.pixelSize: 13; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                        Text { textFormat: Text.PlainText; visible: (modelData.statusText || []).length > 0; text: (modelData.statusText || []).join("; "); color: "#f2c27a"; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                        Rectangle { Layout.fillWidth: true; height: 1; color: "#263345"; Layout.topMargin: 5; Layout.bottomMargin: 8 }
+                    }
+                }
                 FormField { id: meterName; Layout.fillWidth: true; label: "Название прибора"; text: window.selected.name || "" }
                 ActionButton { text: "Сохранить название"; secondary: true; onClicked: window.notify(backend.renameMeter(window.selectedId,meterName.text),"Название сохранено") }
-                SectionLabel { visible: !window.selected.demo; text: "КЛЮЧ AES-128" }
-                FormField { id: meterKey; visible: !window.selected.demo; Layout.fillWidth: true; label: "32 HEX-символа · ключ не отображается после сохранения"; secret: true; placeholder: "Введите ключ прибора" }
+                SectionLabel { visible: !window.selected.demo && window.selected.mode !== "none"; text: "КЛЮЧ AES-128" }
+                FormField { id: meterKey; visible: !window.selected.demo && window.selected.mode !== "none"; Layout.fillWidth: true; label: "32 HEX-символа · ключ не отображается после сохранения"; secret: true; placeholder: "Введите ключ прибора" }
                 Flow {
-                    visible: !window.selected.demo; Layout.fillWidth: true; spacing: 10
+                    visible: !window.selected.demo && window.selected.mode !== "none"; Layout.fillWidth: true; spacing: 10
                     ActionButton { text: "Сохранить ключ"; onClicked: { let error = backend.saveKey(window.selectedId,meterKey.text); if (!error) meterKey.text = ""; window.notify(error,"Ключ сохранён; результат расшифровки — в карточке") } }
                     ActionButton { text: "Удалить ключ"; secondary: true; danger: true; onClicked: window.notify(backend.forgetKey(window.selectedId),"Ключ удалён") }
                 }
