@@ -87,6 +87,23 @@ private slots:
         b.ingest("manufacturer",65535,{},bytes,-50,{});
         QVERIFY(b.meters().isEmpty());
     }
+    void namelessMeterWithUnknownDeviceTypeIsReceived() {
+        // Android's BluetoothDevice.getType() is metadata, not proof that an
+        // advertising callback contains no LE data. Do not discard its payload.
+        QBluetoothDeviceInfo info(QBluetoothAddress("2B:80:03:42:8B:90"),QString(),0);
+        info.setCoreConfigurations(QBluetoothDeviceInfo::UnknownCoreConfiguration);
+        info.setRssi(-73);
+        info.setManufacturerData(0x168f,QByteArray::fromHex("64325476980603e1bcf26a580101007831000000003c015e190000"));
+        Backend b;
+        b.discovered(info);
+        QCOMPARE(b.captures().size(),1);
+        QCOMPARE(b.captures().first().toMap().value("company").toInt(),0x168f);
+        QCOMPARE(b.meters().size(),1);
+        const auto meter=b.meters().first().toMap();
+        QVERIFY(meter.value("valid").toBool());
+        QCOMPARE(meter.value("serial").toString(),QString("98765432"));
+        QCOMPARE(meter.value("reading").toDouble(),6.588);
+    }
     void readingsPersistAndAddressRotationDoesNotDuplicate() {
         QString id;
         {

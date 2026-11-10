@@ -208,7 +208,10 @@ void Backend::applicationActive(bool active) {
     } else if (active && wantedScan) startScan();
 }
 void Backend::discovered(const QBluetoothDeviceInfo &info) {
-    if (!(info.coreConfigurations() & QBluetoothDeviceInfo::LowEnergyCoreConfiguration)) return;
+    // Discovery already runs with LowEnergyMethod. Android device type can be
+    // unknown even when manufacturer/service data arrived in a BLE callback.
+    // Accept the data independently of that metadata; protocol matching below
+    // decides whether the payload belongs to a supported meter.
     const auto manufacturer=info.manufacturerData();
     for (auto it=manufacturer.cbegin();it!=manufacturer.cend();++it) ingest("manufacturer",it.key(),{},it.value(),info.rssi(),info.address().toString());
     const auto services=info.serviceData();
