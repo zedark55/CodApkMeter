@@ -79,6 +79,9 @@ Backend::Backend(QObject *parent) : QObject(parent) {
     ageTimer.setInterval(10000);
     connect(&ageTimer,&QTimer::timeout,this,&Backend::changed);
     ageTimer.start();
+    uiTimer.setSingleShot(true);
+    uiTimer.setInterval(250);
+    connect(&uiTimer,&QTimer::timeout,this,&Backend::flushUi);
     saveTimer.setSingleShot(true);
     saveTimer.setInterval(700);
     connect(&saveTimer,&QTimer::timeout,this,[this] {
@@ -133,6 +136,7 @@ QVariantList Backend::meters() const {
         auto m=v.toMap();
         if (m.value("demo").toBool()!=m_demo) continue;
         auto date=QDateTime::fromString(m.value("lastSeen").toString(),Qt::ISODateWithMs);
+        m["lastReceivedAt"]=date.isValid() ? date.toLocalTime().toString("dd.MM.yyyy HH:mm:ss") : QString();
         qint64 age=qMax<qint64>(0,date.secsTo(QDateTime::currentDateTimeUtc()));
         m["age"]=age<60 ? "только что" : age<3600 ? QString::number(age/60)+" мин назад" : age<86400 ? QString::number(age/3600)+" ч назад" : QString::number(age/86400)+" дн назад";
         m["stale"]=age>180;
@@ -140,12 +144,26 @@ QVariantList Backend::meters() const {
     }
     return list;
 }
+QVariantList Backend::latestCaptures() const {
+    QVariantList list;
+    for (const auto &capture : m_latestCaptures) list.append(capture);
+    std::sort(list.begin(),list.end(),[](const QVariant &a,const QVariant &b) {
+        return a.toMap().value("sequence").toULongLong()>b.toMap().value("sequence").toULongLong();
+    });
+    return list;
+}
+void Backend::flushUi() {
+    const bool captures=capturesPending,meters=metersPending;
+    capturesPending=false; metersPending=false;
+    if (captures) { emit capturesChanged(); emit packetCountChanged(); }
+    if (meters) emit changed();
+}
 void Backend::setDemo(bool value) {
     if (value==m_demo) return;
     stopScan();
     m_demo=value;
     m_packetCount=0;
-    m_captures.clear(); emit capturesChanged();
+    clearCaptures();
     setStatus(value ? "Демонстрация · синтетические данные" : "Готов к приёму");
     emit changed();
     if (value) startScan();
@@ -233,16 +251,28 @@ void Backend::ingest(const QString &source, int company, const QString &service,
     QVariantMap capture{{"time",QDateTime::currentDateTime().toString("HH:mm:ss")},{"source",source},
         {"company",company},{"service",service},{"hex",QString::fromLatin1(packet.toHex(' ')).toUpper()},
         {"rssi",rssi},{"address",address},{"protocol",protocol ? protocol->name() : matches.size()>1 ? "Конфликт протоколов" : "Неизвестный формат"}};
+    capture["sequence"]=QVariant::fromValue(++captureSequence);
     m_captures.prepend(capture);
     if (m_captures.size()>200) m_captures.removeLast();
-    emit capturesChanged();
-    if (!protocol) { emit changed(); return; }
+    // Keep one latest packet per Company ID (or Service UUID), independently
+    // of the busy 200-event history. Repeated traffic cannot evict another ID.
+    const QString captureId=source=="manufacturer" ? "m/"+QString::number(company) : "s/"+service.toLower();
+    if (!m_latestCaptures.contains(captureId) && m_latestCaptures.size()>=1024) {
+        auto oldest=m_latestCaptures.begin();
+        for (auto it=m_latestCaptures.begin();it!=m_latestCaptures.end();++it)
+            if (it.value().value("sequence").toULongLong()<oldest.value().value("sequence").toULongLong()) oldest=it;
+        m_latestCaptures.erase(oldest);
+    }
+    m_latestCaptures.insert(captureId,capture);
+    capturesPending=true;
+    if (!uiTimer.isActive()) uiTimer.start();
+    if (!protocol) return;
     auto serial=protocol->identity(packet);
-    if (serial.isEmpty()) { emit changed(); return; }
+    if (serial.isEmpty()) return;
     auto id=(m_demo ? "demo/" : "real/")+protocol->id()+"/"+serial;
     auto result=protocol->decode(packet,m_demo ? demoKey : vault.get(id));
     int index=meterIndex(id);
-    if (!result.ok && index<0 && protocol->json.value("decoder")=="eto-water-v2") { emit changed(); return; }
+    if (!result.ok && index<0 && protocol->json.value("decoder")=="eto-water-v2") return;
     if (index<0 && m_meters.size()>=200) { setStatus("Достигнут лимит: 200 приборов"); emit changed(); return; }
     QVariantMap meter=index<0 ? QVariantMap() : m_meters[index].toMap();
     const QString displaySerial=result.metadata.value("serial",meter.value("serial",serial)).toString();
@@ -254,6 +284,7 @@ void Backend::ingest(const QString &source, int company, const QString &service,
     meter["kind"]=protocol->json.value("kind").toString();
     meter["mode"]=protocol->json.value("encryption").toObject().value("mode").toString();
     meter["demo"]=m_demo; meter["lastSeen"]=when(); meter["rssi"]=rssi;
+    meter["lastPacketType"]=!result.ok ? "Ошибка пакета" : result.archived ? "Архив" : "Текущие показания";
     meter["packet"]=QString::fromLatin1(packet.toHex());
     meter["error"]=result.error; meter["valid"]=result.ok;
     if (result.ok) {
@@ -304,7 +335,7 @@ void Backend::ingest(const QString &source, int company, const QString &service,
     }
     if (index<0) m_meters.append(meter); else m_meters[index]=meter;
     if (!m_demo) { dirty=true; if (!saveTimer.isActive()) saveTimer.start(); }
-    emit changed();
+    metersPending=true;
 }
 void Backend::demoTick() {
     ++demoCounter;
@@ -368,4 +399,8 @@ QString Backend::exportReadings(const QUrl &url) const {
     QJsonObject doc{{"application","ChronosBluetoothApk"},{"version",1},{"exportedAt",when()},{"demo",m_demo},{"meters",QJsonArray::fromVariantList(output)}};
     return writeSelected(url,QJsonDocument(doc).toJson()) ? QString() : "Не удалось экспортировать показания";
 }
-void Backend::clearCaptures() { m_captures.clear(); emit capturesChanged(); }
+void Backend::clearCaptures() {
+    m_captures.clear(); m_latestCaptures.clear(); capturesPending=false;
+    // A pending count update must still reach the UI even after clearing.
+    emit capturesChanged(); emit packetCountChanged();
+}

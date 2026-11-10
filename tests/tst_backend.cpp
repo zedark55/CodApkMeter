@@ -230,6 +230,64 @@ private slots:
         QCOMPARE(b.meters().size(),2);
         Backend reloaded; QCOMPARE(reloaded.meters().size(),1);
     }
+    void noisyTrafficIsBatchedAndDoesNotEvictRareCompanyId() {
+        Backend b;
+        QSignalSpy captures(&b,&Backend::capturesChanged);
+        QSignalSpy meters(&b,&Backend::changed);
+        QSignalSpy count(&b,&Backend::packetCountChanged);
+        b.ingest("manufacturer",0x168f,{},QByteArray::fromHex("64325476980603e1bcf26a580101007831000000003c015e190000"),-73,"meter");
+        for (int i=0;i<7570;i++) b.ingest("manufacturer",42,{},QByteArray::number(i),-50,"noise");
+        QCOMPARE(captures.count(),0); QCOMPARE(meters.count(),0); QCOMPARE(count.count(),0);
+        QCOMPARE(b.packetCount(),7571);
+        QCOMPARE(b.captures().size(),200);
+        for (const auto &c : b.captures()) QCOMPARE(c.toMap().value("company").toInt(),42);
+        const auto latest=b.latestCaptures(); QCOMPARE(latest.size(),2);
+        QCOMPARE(latest.first().toMap().value("company").toInt(),42);
+        QCOMPARE(latest.last().toMap().value("company").toInt(),0x168f);
+        QCOMPARE(latest.first().toMap().value("hex").toString(),QString::fromLatin1(QByteArray("7569").toHex(' ')).toUpper());
+        QCOMPARE(b.meters().size(),1);
+        QCOMPARE(b.meters().first().toMap().value("reading").toDouble(),6.588);
+        QTRY_COMPARE(captures.count(),1);
+        QCOMPARE(count.count(),1); QCOMPARE(meters.count(),1);
+        captures.clear(); meters.clear(); count.clear();
+        for (int i=0;i<50;i++) b.ingest("manufacturer",42,{},QByteArray("noise"),-60,{});
+        QTRY_COMPARE(captures.count(),1);
+        QCOMPARE(count.count(),1); QCOMPARE(meters.count(),0);
+    }
+    void latestCaptureCacheIsBoundedAndSeparatesServiceIds() {
+        Backend b;
+        for (int i=0;i<1100;i++) b.ingest("manufacturer",i,{},QByteArray("data"),-60,{});
+        QCOMPARE(b.latestCaptures().size(),1024);
+        QCOMPARE(b.latestCaptures().first().toMap().value("company").toInt(),1099);
+        QCOMPARE(b.latestCaptures().last().toMap().value("company").toInt(),76);
+        b.clearCaptures(); QVERIFY(b.latestCaptures().isEmpty());
+        b.ingest("service",-1,"uuid-one",QByteArray("one"),-60,{});
+        b.ingest("service",-1,"uuid-two",QByteArray("two"),-60,{});
+        b.ingest("service",-1,"UUID-ONE",QByteArray("new"),-60,{});
+        QCOMPARE(b.latestCaptures().size(),2);
+        QCOMPARE(b.latestCaptures().first().toMap().value("service").toString(),QString("UUID-ONE"));
+        b.setDemo(true); b.stopScan();
+        for (const auto &c : b.latestCaptures()) QCOMPARE(c.toMap().value("company").toInt(),65535);
+        b.setDemo(false); QVERIFY(b.latestCaptures().isEmpty());
+    }
+    void lastReceiveTimeIsSeparateFromMeterTimeAndUpdatesForArchives() {
+        Backend b;
+        b.ingest("manufacturer",0x168f,{},QByteArray::fromHex("64785634120605f1cae16a40e20100db030000020037015a1be803"),-60,{});
+        const auto live=b.meters().first().toMap();
+        QVERIFY(!live.value("lastReceivedAt").toString().isEmpty());
+        QCOMPARE(live.value("lastPacketType").toString(),QString("Текущие показания"));
+        auto old=b.m_meters.first().toMap(); old["lastSeen"]="2000-01-01T00:00:00.000Z"; b.m_meters[0]=old;
+        b.ingest("manufacturer",0x168f,{},QByteArray::fromHex("64785634120605a0e6e06a40e20100db030000c00001"),-60,{});
+        const auto archive=b.meters().first().toMap();
+        QCOMPARE(archive.value("deviceTime"),live.value("deviceTime"));
+        QCOMPARE(archive.value("reading"),live.value("reading"));
+        QCOMPARE(archive.value("lastPacketType").toString(),QString("Архив"));
+        const auto received=QDateTime::fromString(archive.value("lastSeen").toString(),Qt::ISODateWithMs);
+        QVERIFY(received.isValid()); QVERIFY(received.msecsTo(QDateTime::currentDateTimeUtc())<2000);
+        QCOMPARE(archive.value("lastReceivedAt").toString(),received.toLocalTime().toString("dd.MM.yyyy HH:mm:ss"));
+        QVERIFY(b.persist()); Backend reloaded;
+        QCOMPARE(reloaded.meters().first().toMap().value("lastReceivedAt"),archive.value("lastReceivedAt"));
+    }
     void captureBufferIsBounded() {
         Backend b;
         for (int i=0;i<250;i++) b.ingest("manufacturer",42,{},QByteArray::fromHex("ffff"),-70,{});

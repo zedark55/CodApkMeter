@@ -4,6 +4,7 @@
 #include <QQuickItem>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QJSValue>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -76,6 +77,21 @@ private slots:
         QVERIFY(text.contains("15:14:09 UTC+5")); QVERIFY(text.contains("Был сброс по питанию"));
         QVERIFY(text.contains("Hall1")); QVERIFY(text.contains("Hall2"));
         QVERIFY(!text.contains("NaN")); QVERIFY(!text.contains("КЛЮЧ AES-128"));
+        QVERIFY(text.contains("Последний приём на телефоне:"));
+        QVERIFY(text.contains("Время текущего показания:"));
+        QVERIFY(QMetaObject::invokeMethod(popup,"close"));
+        window->setProperty("page",1);
+        window->setProperty("captureQuery","0x168f");
+        for (int i=0;i<7570;i++) b.ingest("manufacturer",42,{},QByteArray("noise"),-60,{});
+        b.flushUi();
+        auto filtered=[&] { return window->property("filteredCaptures").value<QJSValue>(); };
+        QTRY_COMPARE(filtered().property("length").toInt(),1);
+        QCOMPARE(filtered().property(0).property("company").toInt(),0x168f);
+        auto view=window->findChild<QObject *>("captureView"); QVERIFY(view);
+        view->setProperty("currentIndex",1);
+        QTRY_COMPARE(filtered().property("length").toInt(),0);
+        view->setProperty("currentIndex",0);
+        QTRY_COMPARE(filtered().property("length").toInt(),1);
         QVERIFY2(warnings.isEmpty(),qPrintable(warnings.join('\n')));
     }
 };

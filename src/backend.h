@@ -3,6 +3,7 @@
 #include "keyvault.h"
 #include <QBluetoothDeviceDiscoveryAgent>
 #include <QDateTime>
+#include <QHash>
 #include <QObject>
 #include <QTimer>
 #include <QUrl>
@@ -11,16 +12,18 @@ class Backend : public QObject {
     Q_OBJECT
     Q_PROPERTY(QVariantList meters READ meters NOTIFY changed)
     Q_PROPERTY(QVariantList captures READ captures NOTIFY capturesChanged)
+    Q_PROPERTY(QVariantList latestCaptures READ latestCaptures NOTIFY capturesChanged)
     Q_PROPERTY(bool scanning READ scanning NOTIFY stateChanged)
     Q_PROPERTY(bool demo READ demo WRITE setDemo NOTIFY stateChanged)
     Q_PROPERTY(QString status READ status NOTIFY stateChanged)
-    Q_PROPERTY(int packetCount READ packetCount NOTIFY changed)
+    Q_PROPERTY(int packetCount READ packetCount NOTIFY packetCountChanged)
     Q_PROPERTY(QString keyStorageInfo READ keyStorageInfo CONSTANT)
 public:
     explicit Backend(QObject *parent = nullptr);
     ~Backend() override;
     QVariantList meters() const;
     QVariantList captures() const { return m_captures; }
+    QVariantList latestCaptures() const;
     bool scanning() const { return m_demo ? demoTimer.isActive() : agent.isActive(); }
     bool demo() const { return m_demo; }
     QString status() const { return m_status; }
@@ -41,6 +44,7 @@ signals:
     void changed();
     void stateChanged();
     void capturesChanged();
+    void packetCountChanged();
 private:
     friend class BackendTests;
     friend class EtoUiTests;
@@ -48,9 +52,14 @@ private:
     QTimer demoTimer;
     QTimer ageTimer;
     QTimer saveTimer;
+    QTimer uiTimer;
     QVector<Protocol> m_protocols;
     QVariantList m_meters;
     QVariantList m_captures;
+    QHash<QString,QVariantMap> m_latestCaptures;
+    quint64 captureSequence = 0;
+    bool capturesPending = false;
+    bool metersPending = false;
     KeyVault vault;
     bool m_demo = false;
     bool wantedScan = false;
@@ -70,4 +79,5 @@ private:
     void setStatus(const QString &message);
     int meterIndex(const QString &id) const;
     void retryMeter(int index);
+    void flushUi();
 };

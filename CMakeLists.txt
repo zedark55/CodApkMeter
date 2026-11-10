@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(ChronosBluetoothApk VERSION 0.1.6 LANGUAGES C CXX)
+project(ChronosBluetoothApk VERSION 0.1.7 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Quick QuickControls2 Bluetooth)
@@ -47,7 +47,7 @@ set_target_properties(ChronosBluetoothApk PROPERTIES
     QT_ANDROID_MIN_SDK_VERSION 26
     QT_ANDROID_TARGET_SDK_VERSION 35
     QT_ANDROID_VERSION_NAME "${PROJECT_VERSION}"
-    QT_ANDROID_VERSION_CODE 7)
+    QT_ANDROID_VERSION_CODE 8)
 if(ANDROID)
     # New or edited package assets must invalidate the APK, including files
     # absent from androiddeployqt's previous dependency file.

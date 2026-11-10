@@ -29,7 +29,8 @@ ApplicationWindow {
     property string captureQuery: ""
     property var filteredCaptures: {
         const query = captureQuery.trim().toUpperCase().replace(/^0X/, "")
-        return backend.captures.filter(function(capture) {
+        const captures = captureView.currentIndex === 0 ? backend.latestCaptures : backend.captures
+        return captures.filter(function(capture) {
             if (!query.length) return true
             if (capture.source !== "manufacturer") return false
             const company = capture.company.toString(16).toUpperCase()
@@ -186,10 +187,16 @@ ApplicationWindow {
             ColumnLayout {
                 spacing: 16
                 Text { textFormat: Text.PlainText; text: "Эфир"; color: "#f1f6ff"; font.pixelSize: 32; font.weight: Font.DemiBold }
-                Text { textFormat: Text.PlainText; text: "Manufacturer и Service Data, которые передал Qt. Последние 200 событий. Ключи здесь не отображаются."; color: "#91a2b8"; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                Text { textFormat: Text.PlainText; text: "Последний пакет каждого Company ID или Service UUID сохраняется отдельно: до 1024 ID за сеанс. История — последние 200 событий. Список обновляется порциями каждые 250 мс при поступлении данных."; color: "#91a2b8"; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 RowLayout {
                     ActionButton { text: backend.scanning ? "Пауза" : "Начать приём"; onClicked: backend.toggleScan() }
                     ActionButton { text: "Очистить"; secondary: true; onClicked: backend.clearCaptures() }
+                }
+                ComboBox {
+                    id: captureView; objectName: "captureView"
+                    Layout.fillWidth: true
+                    model: ["Последние по ID", "Последние 200 событий"]
+                    Accessible.name: "Режим просмотра эфира"
                 }
                 RowLayout {
                     Layout.fillWidth: true
@@ -205,6 +212,7 @@ ApplicationWindow {
                     ActionButton { text: "Сбросить"; secondary: true; visible: captureSearch.text.length > 0; onClicked: captureSearch.clear() }
                 }
                 Text { textFormat: Text.PlainText; text: backend.status; color: "#83e4ce"; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                Text { textFormat: Text.PlainText; text: "Событий приёма: " + backend.packetCount + " · показано: " + window.filteredCaptures.length; color: "#63758e"; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                 ListView {
                     id: captureList; Layout.fillWidth: true; Layout.fillHeight: true; clip: true; spacing: 10; model: window.filteredCaptures
                     delegate: Panel {
@@ -219,6 +227,7 @@ ApplicationWindow {
                                 Text { textFormat: Text.PlainText; text: modelData.source === "manufacturer" ? "ID " + modelData.company.toString(16).toUpperCase() : "SERVICE"; color: "#91a2b8"; font.pixelSize: 10 }
                             }
                             Text { textFormat: Text.PlainText; text: modelData.protocol; color: "#dce5f2"; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                            Text { textFormat: Text.PlainText; text: "Адрес: " + (modelData.address || "—"); color: "#91a2b8"; font.pixelSize: 10; Layout.fillWidth: true; wrapMode: Text.WrapAnywhere }
                             Text { textFormat: Text.PlainText; visible: modelData.source === "service"; text: modelData.service; color: "#91a2b8"; font.pixelSize: 10; Layout.fillWidth: true; wrapMode: Text.WrapAnywhere }
                             TextArea { textFormat: TextEdit.PlainText; text: modelData.hex; readOnly: true; selectByMouse: true; wrapMode: TextEdit.WrapAnywhere; color: "#91a2b8"; font.family: "monospace"; font.pixelSize: 11; Layout.fillWidth: true; padding: 0; background: null }
                         }
@@ -297,7 +306,8 @@ ApplicationWindow {
                 Text { textFormat: Text.PlainText; text: window.selected.name || ""; color: "#f1f6ff"; font.pixelSize: 25; font.weight: Font.DemiBold; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 Text { textFormat: Text.PlainText; text: "ID " + (window.selected.serial || "") + "  ·  " + (window.selected.protocolName || ""); color: "#91a2b8"; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 Text { textFormat: Text.PlainText; text: window.selected.hasReading ? Number(window.selected.reading).toLocaleString(Qt.locale("ru_RU"),'f',window.selected.readingDecimals === undefined ? 3 : window.selected.readingDecimals) + " " + window.selected.unit : "Нет показаний"; color: "#83e4ce"; font.pixelSize: 32; font.weight: Font.DemiBold; Layout.fillWidth: true; wrapMode: Text.WordWrap }
-                Text { textFormat: Text.PlainText; text: (window.selected.valid ? "Принято: " : "Последний успешный приём: ") + (window.selected.deviceTime || window.selected.lastReadingAt || "—"); color: "#91a2b8"; font.pixelSize: 10; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                Text { textFormat: Text.PlainText; text: "Последний приём на телефоне: " + (window.selected.lastReceivedAt || "—") + " · " + (window.selected.lastPacketType || "Пакет"); color: "#83e4ce"; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                Text { textFormat: Text.PlainText; text: "Время текущего показания: " + (window.selected.deviceTime || window.selected.lastReadingAt || "—"); color: "#91a2b8"; font.pixelSize: 10; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 Text { textFormat: Text.PlainText; visible: window.selected.error !== ""; text: window.selected.error || ""; color: "#f2c27a"; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 SectionLabel { text: "ИСТОРИЯ ПОКАЗАНИЙ" }
                 Canvas {
