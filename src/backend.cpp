@@ -16,9 +16,6 @@
 #include <mbedtls/ccm.h>
 #include <limits>
 #include <algorithm>
-#ifdef Q_OS_ANDROID
-#include <QOperatingSystemVersion>
-#endif
 
 namespace {
 const QByteArray demoKey = QByteArray::fromHex("00112233445566778899aabbccddeeff");
@@ -173,7 +170,9 @@ void Backend::startScan() {
         return;
     }
 #ifdef Q_OS_ANDROID
-    if (QOperatingSystemVersion::current().majorVersion()<12) {
+    {
+        // Scan without neverForLocation: Android can otherwise hide beacons.
+        // No positioning API is used; permission is only for BLE discovery.
         QLocationPermission location;
         location.setAccuracy(QLocationPermission::Precise);
         if (qApp->checkPermission(location)!=Qt::PermissionStatus::Granted) {
@@ -183,7 +182,7 @@ void Backend::startScan() {
                 permissionPending=false;
                 if (!wantedScan || !isForeground) return;
                 if (permission.status()==Qt::PermissionStatus::Granted) startScan();
-                else { wantedScan=false; setStatus("Android 8–11 требует разрешение геолокации для BLE-сканирования"); }
+                else { wantedScan=false; setStatus("Для приёма BLE-маяков разрешите точное местоположение при использовании приложения и включите геолокацию телефона"); }
             });
             return;
         }
