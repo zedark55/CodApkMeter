@@ -16,8 +16,21 @@
 #include <mbedtls/ccm.h>
 #include <limits>
 #include <algorithm>
+#ifdef Q_OS_ANDROID
+#include <QJniEnvironment>
+#include <QJniObject>
+#include <QtCore/qcoreapplication_platform.h>
+#endif
 
 namespace {
+#ifdef Q_OS_ANDROID
+bool clearJavaException() {
+    QJniEnvironment env;
+    if (!env->ExceptionCheck()) return false;
+    env->ExceptionClear();
+    return true;
+}
+#endif
 const QByteArray demoKey = QByteArray::fromHex("00112233445566778899aabbccddeeff");
 QString when() { return QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs); }
 bool writeJson(const QString &file, const QJsonDocument &doc) {
@@ -82,6 +95,10 @@ Backend::Backend(QObject *parent) : QObject(parent) {
     uiTimer.setSingleShot(true);
     uiTimer.setInterval(250);
     connect(&uiTimer,&QTimer::timeout,this,&Backend::flushUi);
+#ifdef Q_OS_ANDROID
+    androidScanTimer.setInterval(100);
+    connect(&androidScanTimer,&QTimer::timeout,this,&Backend::pollAndroidScan);
+#endif
     saveTimer.setSingleShot(true);
     saveTimer.setInterval(700);
     connect(&saveTimer,&QTimer::timeout,this,[this] {
@@ -90,7 +107,20 @@ Backend::Backend(QObject *parent) : QObject(parent) {
     });
     if (!storageError.isEmpty()) setStatus(storageError);
 }
-Backend::~Backend() { if (dirty) persist(); }
+Backend::~Backend() {
+#ifdef Q_OS_ANDROID
+    stopAndroidScan();
+#endif
+    if (dirty) persist();
+}
+bool Backend::scanning() const {
+    if (m_demo) return demoTimer.isActive();
+#ifdef Q_OS_ANDROID
+    return androidScanning;
+#else
+    return agent.isActive();
+#endif
+}
 
 void Backend::setStatus(const QString &message) { m_status=message; emit stateChanged(); }
 QString Backend::keyStorageInfo() const {
@@ -205,14 +235,28 @@ void Backend::startScan() {
             return;
         }
     }
-#endif
+    auto error=QJniObject::callStaticObjectMethod("org/codapkmeter/app/BleScanner","start",
+        "(Landroid/content/Context;)Ljava/lang/String;",
+        QNativeInterface::QAndroidApplication::context().object());
+    if (clearJavaException() || !error.isValid()) {
+        wantedScan=false; setStatus("Не удалось загрузить Android BLE-сканер"); return;
+    }
+    if (!error.toString().isEmpty()) { wantedScan=false; setStatus(error.toString()); return; }
+    androidScanning=true;
+    androidScanTimer.start();
+    setStatus("Слушаем Bluetooth LE · интенсивный приём · без подключения");
+#else
     agent.start(QBluetoothDeviceDiscoveryAgent::LowEnergyMethod);
     if (agent.isActive()) setStatus("Слушаем Bluetooth LE · без подключения");
+#endif
     emit stateChanged();
 }
 void Backend::stopScan() {
     wantedScan=false;
     demoTimer.stop();
+#ifdef Q_OS_ANDROID
+    stopAndroidScan();
+#endif
     if (agent.isActive()) agent.stop();
     setStatus("Приём приостановлен");
 }
@@ -221,10 +265,53 @@ void Backend::applicationActive(bool active) {
     if (!active && dirty) { if (persist()) dirty=false; else setStatus("Не удалось сохранить показания"); }
     if (!active && wantedScan) {
         demoTimer.stop();
+#ifdef Q_OS_ANDROID
+        stopAndroidScan();
+#endif
         if (agent.isActive()) agent.stop();
         setStatus("Приём приостановлен до возврата в приложение");
     } else if (active && wantedScan) startScan();
 }
+void Backend::processScanBatch(const QByteArray &json) {
+    const auto doc=QJsonDocument::fromJson(json);
+    if (!doc.isObject()) { setStatus("Ошибка чтения данных Android BLE-сканера"); return; }
+    const auto batch=doc.object();
+    const auto packets=batch.value("packets").toArray();
+    for (int i=0;i<packets.size() && i<256;++i) {
+        const auto p=packets[i].toObject();
+        const auto source=p.value("source").toString();
+        const int company=p.value("company").toInt(-1);
+        if (source!="manufacturer" && source!="service") continue;
+        if (source=="manufacturer" && (company<0 || company>65535)) continue;
+        QByteArray packet;
+        if (!Protocol::hex(p.value("hex").toString(),packet)) continue;
+        ingest(source,company,p.value("service").toString(),packet,p.value("rssi").toInt(),p.value("address").toString());
+    }
+    if (batch.value("dropped").toInt()>0) setStatus("Переполнение очереди BLE: часть событий пропущена");
+    if (!batch.value("error").toString().isEmpty()) {
+#ifdef Q_OS_ANDROID
+        stopAndroidScan();
+#endif
+        wantedScan=false; setStatus(batch.value("error").toString());
+    }
+}
+#ifdef Q_OS_ANDROID
+void Backend::stopAndroidScan() {
+    androidScanTimer.stop();
+    if (androidScanning) {
+        QJniObject::callStaticMethod<void>("org/codapkmeter/app/BleScanner","stop","()V");
+        clearJavaException();
+    }
+    androidScanning=false;
+}
+void Backend::pollAndroidScan() {
+    auto batch=QJniObject::callStaticObjectMethod("org/codapkmeter/app/BleScanner","drain","()Ljava/lang/String;");
+    if (clearJavaException() || !batch.isValid()) {
+        stopAndroidScan(); wantedScan=false; setStatus("Ошибка связи с Android BLE-сканером"); return;
+    }
+    processScanBatch(batch.toString().toUtf8());
+}
+#endif
 void Backend::discovered(const QBluetoothDeviceInfo &info) {
     // Discovery already runs with LowEnergyMethod. Android device type can be
     // unknown even when manufacturer/service data arrived in a BLE callback.

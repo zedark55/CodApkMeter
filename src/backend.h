@@ -24,7 +24,7 @@ public:
     QVariantList meters() const;
     QVariantList captures() const { return m_captures; }
     QVariantList latestCaptures() const;
-    bool scanning() const { return m_demo ? demoTimer.isActive() : agent.isActive(); }
+    bool scanning() const;
     bool demo() const { return m_demo; }
     QString status() const { return m_status; }
     int packetCount() const { return m_packetCount; }
@@ -53,6 +53,12 @@ private:
     QTimer ageTimer;
     QTimer saveTimer;
     QTimer uiTimer;
+#ifdef Q_OS_ANDROID
+    QTimer androidScanTimer;
+    bool androidScanning = false;
+    void pollAndroidScan();
+    void stopAndroidScan();
+#endif
     QVector<Protocol> m_protocols;
     QVariantList m_meters;
     QVariantList m_captures;
@@ -80,4 +86,5 @@ private:
     int meterIndex(const QString &id) const;
     void retryMeter(int index);
     void flushUi();
+    void processScanBatch(const QByteArray &json);
 };

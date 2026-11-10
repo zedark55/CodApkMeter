@@ -18,6 +18,29 @@ class EtoUiTests : public QObject {
         return result;
     }
 private slots:
+    void archiveFirstCardUpdatesWhenLivePacketArrives() {
+        QTemporaryDir temp; QVERIFY(temp.isValid()); qputenv("XDG_DATA_HOME",temp.path().toUtf8());
+        QQuickStyle::setStyle("Basic");
+        Backend b;
+        b.ingest("manufacturer",0x168f,{},QByteArray::fromHex("64325476980603000000000000000000000000000002"),-73,{});
+        QQmlApplicationEngine engine; QStringList warnings;
+        connect(&engine,&QQmlEngine::warnings,this,[&](const QList<QQmlError> &errors) {
+            for (const auto &e : errors) warnings.append(e.toString());
+        });
+        engine.rootContext()->setContextProperty("backend",&b);
+        engine.load(QUrl::fromLocalFile(QStringLiteral(PROJECT_DIR "/qml/Main.qml")));
+        QVERIFY2(!engine.rootObjects().isEmpty(),qPrintable(warnings.join('\n')));
+        auto window=qobject_cast<QQuickWindow *>(engine.rootObjects().first()); QVERIFY(window);
+        window->resize(420,860);
+        window->setProperty("selectedId",b.meters().first().toMap().value("id"));
+        auto popup=window->findChild<QObject *>("meterDialog"); QVERIFY(popup);
+        QVERIFY(QMetaObject::invokeMethod(popup,"open"));
+        QTRY_VERIFY(visibleText(window->contentItem()).join('\n').contains("Нет показаний"));
+        b.ingest("manufacturer",0x168f,{},QByteArray::fromHex("64325476980603e1bcf26a580101007831000000003c015e190000"),-73,{});
+        QTRY_VERIFY(visibleText(window->contentItem()).join('\n').contains("6,5880"));
+        QCOMPARE(b.meters().size(),1);
+        QVERIFY2(warnings.isEmpty(),qPrintable(warnings.join('\n')));
+    }
     void deleteCardRequiresConfirmation() {
         QTemporaryDir temp; QVERIFY(temp.isValid()); qputenv("XDG_DATA_HOME",temp.path().toUtf8());
         QQuickStyle::setStyle("Basic");

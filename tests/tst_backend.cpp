@@ -288,6 +288,46 @@ private slots:
         QVERIFY(b.persist()); Backend reloaded;
         QCOMPARE(reloaded.meters().first().toMap().value("lastReceivedAt"),archive.value("lastReceivedAt"));
     }
+    void zeroMonthlyArchiveFirstDoesNotBlockLiveReadingAfterReload() {
+        const auto archive=QByteArray::fromHex("64325476980603000000000000000000000000000002");
+        const auto live=QByteArray::fromHex("64325476980603e1bcf26a580101007831000000003c015e190000");
+        QString id;
+        {
+            Backend b; b.ingest("manufacturer",0x168f,{},archive,-73,{});
+            QCOMPARE(b.meters().size(),1);
+            const auto m=b.meters().first().toMap(); id=m.value("id").toString();
+            QVERIFY(!m.value("hasReading").toBool());
+            QVERIFY(!m.contains("deviceTimestamp"));
+            QCOMPARE(m.value("archives").toList().size(),1);
+            QVERIFY(b.persist());
+        }
+        Backend b; b.ingest("manufacturer",0x168f,{},live,-73,{});
+        QCOMPARE(b.meters().size(),1);
+        const auto m=b.meters().first().toMap();
+        QCOMPARE(m.value("id").toString(),id);
+        QVERIFY(m.value("hasReading").toBool());
+        QCOMPARE(m.value("reading").toDouble(),6.588);
+        QCOMPARE(m.value("archives").toList().size(),1);
+        b.ingest("manufacturer",0x168f,{},archive,-73,{});
+        QCOMPARE(b.meters().first().toMap().value("reading").toDouble(),6.588);
+    }
+    void androidScanBatchUsesTheSameDecoderAndSurfacesErrors() {
+        Backend b;
+        const QJsonObject packet{{"source","manufacturer"},{"company",0x168f},{"service",""},
+            {"hex","64325476980603e1bcf26a580101007831000000003c015e190000"},
+            {"rssi",-73},{"address","2B:80:03:42:8B:90"}};
+        b.processScanBatch(QJsonDocument(QJsonObject{{"packets",QJsonArray{packet}},{"error",""},{"dropped",0}}).toJson());
+        QCOMPARE(b.meters().size(),1);
+        QCOMPARE(b.meters().first().toMap().value("reading").toDouble(),6.588);
+        QCOMPARE(b.captures().first().toMap().value("address").toString(),QString("2B:80:03:42:8B:90"));
+        b.processScanBatch("{\"packets\":[],\"dropped\":1}");
+        QVERIFY(b.status().contains("Переполнение"));
+        b.processScanBatch("{\"packets\":[],\"error\":\"Ошибка BLE-сканирования Android: 6\"}");
+        QCOMPARE(b.status(),QString("Ошибка BLE-сканирования Android: 6"));
+        const int count=b.packetCount();
+        b.processScanBatch("{\"packets\":[{\"source\":\"bad\",\"hex\":\"FF\"},{\"source\":\"manufacturer\",\"company\":-1,\"hex\":\"FF\"}]}");
+        QCOMPARE(b.packetCount(),count);
+    }
     void captureBufferIsBounded() {
         Backend b;
         for (int i=0;i<250;i++) b.ingest("manufacturer",42,{},QByteArray::fromHex("ffff"),-70,{});
