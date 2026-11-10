@@ -348,6 +348,18 @@ QString Backend::renameMeter(const QString &id, const QString &name) {
     if (!m_demo && !persist()) { m_meters[index]=old; return "Не удалось сохранить название"; }
     emit changed(); return {};
 }
+QString Backend::deleteMeter(const QString &id) {
+    const int index=meterIndex(id);
+    if (index<0) return "Прибор не найден";
+    const auto old=m_meters.takeAt(index);
+    if (!old.toMap().value("demo").toBool() && !persist()) {
+        m_meters.insert(index,old);
+        return "Не удалось сохранить удаление прибора";
+    }
+    // Key management remains separate so rediscovery does not require a new key.
+    emit changed();
+    return {};
+}
 QString Backend::exportReadings(const QUrl &url) const {
     QVariantList output;
     for (const auto &v : meters()) {

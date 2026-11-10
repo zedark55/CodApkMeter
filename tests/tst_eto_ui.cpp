@@ -17,6 +17,41 @@ class EtoUiTests : public QObject {
         return result;
     }
 private slots:
+    void deleteCardRequiresConfirmation() {
+        QTemporaryDir temp; QVERIFY(temp.isValid()); qputenv("XDG_DATA_HOME",temp.path().toUtf8());
+        QQuickStyle::setStyle("Basic");
+        Backend b;
+        b.ingest("manufacturer",5775,{},QByteArray::fromHex("64785634120605f1cae16a40e20100db030000020037015a1be803"),-55,{});
+        QQmlApplicationEngine engine; QStringList warnings;
+        connect(&engine,&QQmlEngine::warnings,this,[&](const QList<QQmlError> &errors) {
+            for (const auto &e : errors) warnings.append(e.toString());
+        });
+        engine.rootContext()->setContextProperty("backend",&b);
+        engine.load(QUrl::fromLocalFile(QStringLiteral(PROJECT_DIR "/qml/Main.qml")));
+        QVERIFY2(!engine.rootObjects().isEmpty(),qPrintable(warnings.join('\n')));
+        auto window=qobject_cast<QQuickWindow *>(engine.rootObjects().first()); QVERIFY(window);
+        window->resize(420,860);
+        window->setProperty("selectedId",b.meters().first().toMap().value("id"));
+        auto popup=window->findChild<QObject *>("meterDialog"); QVERIFY(popup);
+        auto remove=window->findChild<QObject *>("deleteMeterButton"); QVERIFY(remove);
+        auto confirm=window->findChild<QObject *>("confirmDeleteMeterButton"); QVERIFY(confirm);
+        auto cancel=window->findChild<QObject *>("cancelDeleteMeterButton"); QVERIFY(cancel);
+        auto dialog=window->findChild<QObject *>("deleteMeterConfirmation"); QVERIFY(dialog);
+        QVERIFY(QMetaObject::invokeMethod(popup,"open"));
+        QVERIFY(QMetaObject::invokeMethod(remove,"clicked"));
+        QTRY_VERIFY(dialog->property("visible").toBool());
+        QCOMPARE(b.meters().size(),1);
+        QVERIFY(QMetaObject::invokeMethod(cancel,"clicked"));
+        QTRY_VERIFY(!dialog->property("visible").toBool());
+        QCOMPARE(b.meters().size(),1);
+        QVERIFY(QMetaObject::invokeMethod(remove,"clicked"));
+        QVERIFY(QMetaObject::invokeMethod(confirm,"clicked"));
+        QVERIFY(b.meters().isEmpty());
+        QTRY_VERIFY(!popup->property("visible").toBool());
+        QTRY_VERIFY(!dialog->property("visible").toBool());
+        QCOMPARE(window->property("selectedId").toString(),QString());
+        QVERIFY2(warnings.isEmpty(),qPrintable(warnings.join('\n')));
+    }
     void liveAndArchiveCard() {
         QTemporaryDir temp; QVERIFY(temp.isValid()); qputenv("XDG_DATA_HOME",temp.path().toUtf8());
         QQuickStyle::setStyle("Basic");

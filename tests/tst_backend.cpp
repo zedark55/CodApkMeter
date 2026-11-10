@@ -189,6 +189,47 @@ private slots:
         QCOMPARE(after.value("serial"),before.value("serial")); QCOMPARE(after.value("reading"),before.value("reading"));
         QCOMPARE(after.value("fields"),before.value("fields")); QVERIFY(!after.value("valid").toBool());
     }
+    void deleteMeterPersistsAndPreservesOtherMetersAndKey() {
+        const auto first=QByteArray::fromHex("64785634120605f1cae16a40e20100db030000020037015a1be803");
+        const auto second=QByteArray::fromHex("64325476980603e1bcf26a580101007831000000003c015e190000");
+        Backend b;
+        b.ingest("manufacturer",0x168f,{},first,-60,{});
+        b.ingest("manufacturer",0x168f,{},second,-61,{});
+        const auto id=b.meters().first().toMap().value("id").toString();
+        const auto other=b.meters().last().toMap().value("id").toString();
+        const QByteArray key(16,'k'); QVERIFY(b.vault.put(id,key));
+        QVERIFY(b.deleteMeter(id).isEmpty());
+        QCOMPARE(b.meters().size(),1);
+        QCOMPARE(b.meters().first().toMap().value("id").toString(),other);
+        QCOMPARE(b.vault.get(id),key);
+        Backend reloaded;
+        QCOMPARE(reloaded.meters().size(),1);
+        QCOMPARE(reloaded.meters().first().toMap().value("id").toString(),other);
+        const auto path=temp.filePath("after-delete.json");
+        QVERIFY(b.exportReadings(QUrl::fromLocalFile(path)).isEmpty());
+        QFile file(path); QVERIFY(file.open(QIODevice::ReadOnly));
+        QVERIFY(!file.readAll().contains(id.toUtf8()));
+        QVERIFY(!b.deleteMeter(id).isEmpty());
+        b.ingest("manufacturer",0x168f,{},first,-60,{});
+        QCOMPARE(b.meters().size(),2);
+    }
+    void deleteMeterRollsBackOnStorageFailure() {
+        Backend b;
+        b.ingest("manufacturer",0x168f,{},QByteArray::fromHex("64785634120605f1cae16a40e20100db030000020037015a1be803"),-60,{});
+        const auto before=b.m_meters;
+        b.storageError="test storage failure";
+        QVERIFY(!b.deleteMeter(before.first().toMap().value("id").toString()).isEmpty());
+        QCOMPARE(b.m_meters,before);
+    }
+    void deletingDemoMeterDoesNotDeleteRealMeter() {
+        Backend b;
+        b.ingest("manufacturer",0x168f,{},QByteArray::fromHex("64785634120605f1cae16a40e20100db030000020037015a1be803"),-60,{});
+        QVERIFY(b.persist());
+        b.setDemo(true); b.stopScan();
+        QVERIFY(b.deleteMeter(b.meters().first().toMap().value("id").toString()).isEmpty());
+        QCOMPARE(b.meters().size(),2);
+        Backend reloaded; QCOMPARE(reloaded.meters().size(),1);
+    }
     void captureBufferIsBounded() {
         Backend b;
         for (int i=0;i<250;i++) b.ingest("manufacturer",42,{},QByteArray::fromHex("ffff"),-70,{});

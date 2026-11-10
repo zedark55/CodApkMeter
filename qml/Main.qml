@@ -350,6 +350,15 @@ ApplicationWindow {
                     ActionButton { text: "Удалить ключ"; secondary: true; danger: true; onClicked: window.notify(backend.forgetKey(window.selectedId),"Ключ удалён") }
                 }
                 Text { textFormat: Text.PlainText; visible: window.selected.demo === true; text: "Учебный прибор · показания сгенерированы для демонстрации."; color: "#f2c27a"; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true; font.pixelSize: 10 }
+                ActionButton {
+                    objectName: "deleteMeterButton"
+                    text: "Удалить прибор"; secondary: true; danger: true; Layout.fillWidth: true
+                    onClicked: {
+                        deleteConfirmation.meterId = window.selectedId
+                        deleteConfirmation.meterName = window.selected.name || ""
+                        deleteConfirmation.open()
+                    }
+                }
                 Item { height: 8 }
             }
         }
@@ -357,6 +366,40 @@ ApplicationWindow {
     }
 
     FileDialog { id: readingsExport; title: "Экспорт показаний"; fileMode: FileDialog.SaveFile; nameFilters: ["JSON (*.json)"]; defaultSuffix: "json"; onAccepted: window.notify(backend.exportReadings(selectedFile),"Показания экспортированы") }
+    Dialog {
+        id: deleteConfirmation; objectName: "deleteMeterConfirmation"
+        property string meterId: ""
+        property string meterName: ""
+        parent: Overlay.overlay; anchors.centerIn: parent
+        width: Math.min(window.width - 32, 460); modal: true; padding: 20
+        title: "Удалить прибор?"
+        background: Panel { color: "#141e2c" }
+        contentItem: ColumnLayout {
+            spacing: 16
+            Text {
+                textFormat: Text.PlainText
+                text: "Карточка «" + deleteConfirmation.meterName + "», её история и архивы будут удалены. Сохранённый ключ останется в хранилище. При новом приёме пакета карточка появится снова."
+                color: "#dce5f2"; font.pixelSize: 13; wrapMode: Text.WordWrap; Layout.fillWidth: true
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                ActionButton { objectName: "cancelDeleteMeterButton"; text: "Отмена"; secondary: true; Layout.fillWidth: true; onClicked: deleteConfirmation.close() }
+                ActionButton {
+                    objectName: "confirmDeleteMeterButton"
+                    text: "Удалить"; secondary: true; danger: true; Layout.fillWidth: true
+                    onClicked: {
+                        const error = backend.deleteMeter(deleteConfirmation.meterId)
+                        if (!error) {
+                            deleteConfirmation.close()
+                            meterDialog.close()
+                            window.selectedId = ""
+                        }
+                        window.notify(error, "Прибор удалён")
+                    }
+                }
+            }
+        }
+    }
     Popup {
         id: toast; parent: Overlay.overlay; x: (parent.width-width)/2; y: parent.height-height-92
         width: Math.min(window.width-32,520); padding: 16; closePolicy: Popup.NoAutoClose
