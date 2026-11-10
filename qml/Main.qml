@@ -26,6 +26,16 @@ ApplicationWindow {
     property int page: 0
     property string filterKind: "all"
     property string query: ""
+    property string captureQuery: ""
+    property var filteredCaptures: {
+        const query = captureQuery.trim().toUpperCase().replace(/^0X/, "")
+        return backend.captures.filter(function(capture) {
+            if (!query.length) return true
+            if (capture.source !== "manufacturer") return false
+            const company = capture.company.toString(16).toUpperCase()
+            return company.indexOf(query) >= 0 || company.padStart(4, "0").indexOf(query) >= 0
+        })
+    }
     property string selectedId: ""
     property var selected: {
         const list = backend.meters
@@ -181,9 +191,22 @@ ApplicationWindow {
                     ActionButton { text: backend.scanning ? "Пауза" : "Начать приём"; onClicked: backend.toggleScan() }
                     ActionButton { text: "Очистить"; secondary: true; onClicked: backend.clearCaptures() }
                 }
+                RowLayout {
+                    Layout.fillWidth: true
+                    TextField {
+                        id: captureSearch
+                        Layout.fillWidth: true; implicitHeight: 42
+                        placeholderText: "Поиск по ID: 168F, 5D6 или 0x05D6"
+                        Accessible.name: "Поиск в эфире по Company ID"
+                        color: "#e8eef7"; placeholderTextColor: "#63758e"; font.pixelSize: 12; selectByMouse: true
+                        onTextChanged: window.captureQuery = text
+                        background: Rectangle { radius: 10; color: "#141e2c"; border.color: captureSearch.activeFocus ? "#83e4ce" : "#243142" }
+                    }
+                    ActionButton { text: "Сбросить"; secondary: true; visible: captureSearch.text.length > 0; onClicked: captureSearch.clear() }
+                }
                 Text { textFormat: Text.PlainText; text: backend.status; color: "#83e4ce"; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                 ListView {
-                    id: captureList; Layout.fillWidth: true; Layout.fillHeight: true; clip: true; spacing: 10; model: backend.captures
+                    id: captureList; Layout.fillWidth: true; Layout.fillHeight: true; clip: true; spacing: 10; model: window.filteredCaptures
                     delegate: Panel {
                         required property var modelData
                         width: captureList.width; implicitHeight: captureColumn.implicitHeight + 28
@@ -200,7 +223,7 @@ ApplicationWindow {
                             TextArea { textFormat: TextEdit.PlainText; text: modelData.hex; readOnly: true; selectByMouse: true; wrapMode: TextEdit.WrapAnywhere; color: "#91a2b8"; font.family: "monospace"; font.pixelSize: 11; Layout.fillWidth: true; padding: 0; background: null }
                         }
                     }
-                    Text { textFormat: Text.PlainText; anchors.centerIn: parent; visible: captureList.count === 0; text: "Пока тихо. Включите приём пакетов."; color: "#63758e"; font.pixelSize: 12 }
+                    Text { textFormat: Text.PlainText; anchors.centerIn: parent; width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; visible: captureList.count === 0; text: window.captureQuery.trim().length ? "Пакеты с таким ID не найдены." : "Пока тихо. Включите приём пакетов."; color: "#63758e"; font.pixelSize: 12 }
                 }
             }
             // Settings
