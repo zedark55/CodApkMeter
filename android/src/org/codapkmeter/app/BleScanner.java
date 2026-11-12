@@ -20,9 +20,16 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-/** Foreground-only, low latency advertising scan. Never connects to a meter. */
+/**
+ * Android-часть приёма рекламных BLE-пакетов без подключения к прибору.
+ * Работает только при открытом приложении, использует SCAN_MODE_LOW_LATENCY.
+ * Callback Android складывает записи в очередь; поток Qt забирает их через drain().
+ * synchronized защищает общие поля от одновременного callback и вызовов JNI.
+ */
 public final class BleScanner {
     private static final String TAG = "ChronosBLE";
+    // Очередь ограничена по памяти. При перегрузке удаляются самые старые записи,
+    // а число потерь возвращается Qt: переполнение не должно быть незаметным.
     private static final int QUEUE_LIMIT = 4096;
     private static final int BATCH_LIMIT = 256;
     private static final ArrayDeque<JSONObject> pending = new ArrayDeque<>();
@@ -33,6 +40,8 @@ public final class BleScanner {
     private static int dropped;
 
     public static synchronized String start(Context context) {
+        // Каждый запуск начинает новый сеанс. Поздние callback предыдущего
+        // сеанса будут отброшены по сравнению с текущим объектом callback.
         stop();
         pending.clear(); error = ""; dropped = 0;
         try {
@@ -47,6 +56,8 @@ public final class BleScanner {
                     for (ScanResult result : results) receive(this, result);
                 }
                 @Override public void onScanFailed(int code) {
+                    // Успешный возврат startScan не гарантирует успешную регистрацию:
+                    // Android может сообщить отказ асинхронно именно этим методом.
                     synchronized (BleScanner.class) {
                         if (callback != this) return;
                         error = "Ошибка BLE-сканирования Android: " + code;
@@ -55,12 +66,14 @@ public final class BleScanner {
                 }
             };
             ScanSettings settings = new ScanSettings.Builder()
+                    // Balanced может пропустить короткую передачу раз в 90 секунд.
+                    // Low Latency увеличивает активность приёмника и расход энергии.
                     .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
                     .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
                     .setReportDelay(0)
                     .build();
-            // No name, UUID, connectability or Company ID filter: meters may
-            // advertise manufacturer data only, without flags or a local name.
+            // Не фильтруем по имени, UUID, возможности подключения или Company ID:
+            // счётчик может передавать только данные производителя, без имени и flags.
             scanner.startScan(Collections.<ScanFilter>emptyList(), settings, callback);
             Log.i(TAG, "Started foreground BLE scan: LOW_LATENCY, ALL_MATCHES, reportDelay=0");
             return "";
@@ -73,7 +86,7 @@ public final class BleScanner {
 
     public static synchronized void stop() {
         ScanCallback old = callback;
-        callback = null; // Ignore late callbacks from a previous session.
+        callback = null; // Поздние события старого сеанса больше не принимаются.
         if (scanner != null && old != null) {
             try { scanner.stopScan(old); }
             catch (RuntimeException ex) { Log.w(TAG, "Cannot stop BLE scan", ex); }
@@ -96,6 +109,8 @@ public final class BleScanner {
 
     private static void enqueue(String source, int company, String service, byte[] data,
                                 ScanResult result) throws JSONException {
+        // Android уже отделил Company ID/UUID от payload. В Qt передаются
+        // одинаковые поля для Manufacturer Data и Service Data, без ключей AES.
         if (data == null || data.length == 0 || data.length > 1650) return;
         JSONObject packet = new JSONObject();
         packet.put("source", source); packet.put("company", company);
@@ -107,6 +122,8 @@ public final class BleScanner {
     }
 
     private static synchronized void receive(ScanCallback owner, ScanResult result) {
+        // Некоторые некорректные объявления дают пустые ScanRecord/таблицы.
+        // Это не повод падать или считать пакет данными известного прибора.
         if (owner != callback || result == null) return;
         ScanRecord record = result.getScanRecord();
         if (record == null) return;
@@ -126,7 +143,11 @@ public final class BleScanner {
         }
     }
 
-    /** Qt polls in bounded batches; Android callback never touches Qt objects. */
+    /**
+     * Возвращает максимум 256 записей за опрос, ошибки и число потерь.
+     * Callback не вызывает C++ и не хранит указателей на Backend: уничтожение
+     * модели или остановка приложения не создаёт обращения к освобождённой памяти.
+     */
     public static synchronized String drain() {
         try {
             if (callback != null && adapter != null && !adapter.isEnabled()) error = "Включите Bluetooth в настройках телефона";

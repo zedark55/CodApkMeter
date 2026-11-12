@@ -12,13 +12,20 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
-/** Device AES keys are encrypted with a non-exportable Android Keystore wrapping key. */
+/**
+ * Ключи приборов шифруются отдельным ключом-обёрткой AES-GCM из Android Keystore.
+ * В SharedPreferences сохраняются только IV и шифротекст с тегом, а не открытый ключ.
+ * Ключ-обёртка не извлекается приложением как массив байтов; фактическое аппаратное
+ * исполнение Keystore зависит от устройства и здесь отдельно не запрашивается.
+ */
 public final class KeyVault {
     private static final String ALIAS = "codapkmeter.wrapping.v1";
     private static SharedPreferences prefs(Context c) {
         return c.getSharedPreferences("meter_keys", Context.MODE_PRIVATE);
     }
     private static synchronized SecretKey wrappingKey() throws Exception {
+        // Имя ALIAS постоянно: смена этого имени лишит доступа к старым записям.
+        // При первом использовании создаём ключ, при следующих — берём существующий.
         KeyStore store = KeyStore.getInstance("AndroidKeyStore");
         store.load(null);
         if (store.containsAlias(ALIAS)) return (SecretKey) store.getKey(ALIAS, null);
@@ -31,6 +38,9 @@ public final class KeyVault {
         return generator.generateKey();
     }
     public static boolean put(Context c, String id, String hex) {
+        // Это локальное шифрование хранения, не расшифровка радиопакета.
+        // IV генерируется Cipher при каждой записи; AAD привязывает секрет к ID
+        // прибора, чтобы перенос записи под другой ID не прошёл проверку GCM.
         try {
             if (!hex.matches("[0-9a-fA-F]{32}")) return false;
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
@@ -43,6 +53,8 @@ public final class KeyVault {
         } catch (Exception e) { return false; }
     }
     public static String get(Context c, String id) {
+        // Восстанавливаем IV и защищённый текст. doFinal проверяет тег GCM;
+        // повреждённое значение, другой ID или недоступный Keystore дают пустой результат.
         try {
             String value = prefs(c).getString(id, null);
             if (value == null) return "";
@@ -56,6 +68,7 @@ public final class KeyVault {
         } catch (Exception e) { return ""; }
     }
     public static boolean remove(Context c, String id) {
+        // Удаляется запись одного прибора; общий ключ-обёртка остаётся для остальных.
         return prefs(c).edit().remove(id).commit();
     }
     private KeyVault() {}

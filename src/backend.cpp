@@ -35,6 +35,8 @@ bool clearJavaException() {
 const QByteArray demoKey = QByteArray::fromHex("00112233445566778899aabbccddeeff");
 QString when() { return QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs); }
 bool writeJson(const QString &file, const QJsonDocument &doc) {
+    // QSaveFile заменяет целевой файл только после успешного commit: ошибка
+    // записи не должна оставлять вместо показаний частично записанный JSON.
     QSaveFile out(file);
     if (!out.open(QIODevice::WriteOnly)) return false;
     QByteArray data=doc.toJson();
@@ -44,15 +46,19 @@ bool writeJson(const QString &file, const QJsonDocument &doc) {
     return true;
 }
 bool writeSelected(const QUrl &url, const QByteArray &data) {
+    // На Android системный диалог может вернуть content://, а не путь файла.
+    // QFile в Qt for Android умеет открыть этот URI через системный провайдер.
     if (!url.isLocalFile() && url.scheme()!="content") return false;
     QFile file(url.isLocalFile() ? url.toLocalFile() : url.toString());
     return file.open(QIODevice::WriteOnly|QIODevice::Truncate) && file.write(data)==data.size() && file.flush();
 }
 QByteArray demoPacket(int index, quint32 counter) {
+    // Демо проходит настоящий AES-CCM тракт. Это проверяет ту же расшифровку,
+    // что используется для приборов, но не выдаёт синтетические данные за реальные.
     QByteArray header(10,0), plain(7,0), cipher(7,0), tag(4,0);
     header[0]=char(index==2 ? 0xa2 : 0xa1);
     qToBigEndian<quint16>(quint16(1001+index),header.data()+1);
-    // A new random session prefix plus monotonically increasing counter: demo only.
+    // Для демо nonce включает случайный префикс сеанса и возрастающий счётчик.
     static quint16 session=quint16(QRandomGenerator::global()->generate());
     header[3]=char(index);
     qToBigEndian<quint16>(session,header.data()+4);
@@ -74,10 +80,14 @@ QByteArray demoPacket(int index, quint32 counter) {
 }
 
 Backend::Backend(QObject *parent) : QObject(parent) {
+    // Сначала читаются сохранённые карточки и встроенные протоколы. Затем
+    // подключаются источники событий; сканирование само по себе не запускается.
     storage=QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     if (!QDir().mkpath(storage)) storageError="Не удалось создать хранилище приложения";
     load();
     agent.setLowEnergyDiscoveryTimeout(0);
+    // Qt-сканер используется на настольных платформах. На Android ниже работает
+    // отдельный сканер Low Latency: его очередь опрашивается каждые 100 мс.
     connect(&agent,&QBluetoothDeviceDiscoveryAgent::deviceDiscovered,this,&Backend::discovered);
     connect(&agent,&QBluetoothDeviceDiscoveryAgent::deviceUpdated,this,[this](const QBluetoothDeviceInfo &info,QBluetoothDeviceInfo::Fields) { discovered(info); });
     connect(&agent,&QBluetoothDeviceDiscoveryAgent::errorOccurred,this,[this](QBluetoothDeviceDiscoveryAgent::Error e) {
@@ -95,6 +105,8 @@ Backend::Backend(QObject *parent) : QObject(parent) {
     ageTimer.start();
     uiTimer.setSingleShot(true);
     uiTimer.setInterval(250);
+    // Таймер не перезапускается на каждом пакете: непрерывный поток иначе
+    // откладывал бы уведомление интерфейса на неопределённое время.
     connect(&uiTimer,&QTimer::timeout,this,&Backend::flushUi);
 #ifdef Q_OS_ANDROID
     androidScanTimer.setInterval(100);
@@ -135,8 +147,8 @@ QString Backend::keyStorageInfo() const {
 void Backend::load() {
     QString catalogError;
     if (!ProtocolCatalog::load(m_protocols,catalogError)) storageError=catalogError;
-    // Legacy protocols.json is intentionally ignored and preserved on disk.
-    // Protocols can now enter the application only through compiled resources.
+    // Старый protocols.json оставляем на диске, но не используем. Расширение
+    // списка протоколов возможно только через ресурсы новой сборки приложения.
     QFile metersFile(storage+"/meters.json");
     if (metersFile.exists()) {
         if (!metersFile.open(QIODevice::ReadOnly) || metersFile.size()>32*1024*1024) { storageError="Не удалось прочитать meters.json"; return; }
@@ -156,12 +168,17 @@ void Backend::load() {
 }
 
 bool Backend::persist() {
-    if (!storageError.isEmpty()) return false; // Never overwrite a corrupt user file automatically.
+    // При ошибке чтения не затираем исходный файл. Демо-карточки также никогда
+    // не попадают в постоянное хранилище реальных приборов.
+    if (!storageError.isEmpty()) return false;
     QVariantList real;
     for (const auto &v : m_meters) if (!v.toMap().value("demo").toBool()) real.append(v);
     return writeJson(storage+"/meters.json",QJsonDocument(QJsonArray::fromVariantList(real)));
 }
 QVariantList Backend::meters() const {
+    // Подготовка представления для QML: исходные даты остаются в UTC, а точное
+    // время приёма показывается в часовом поясе телефона. Возраст вычисляется
+    // заново, поэтому давно молчащие приборы отмечаются без новых радиопакетов.
     QVariantList list;
     for (const auto &v : m_meters) {
         auto m=v.toMap();
@@ -176,6 +193,8 @@ QVariantList Backend::meters() const {
     return list;
 }
 QVariantList Backend::latestCaptures() const {
+    // Сортируем копию кэша только при запросе списка. sequence задаёт порядок
+    // приёма даже для нескольких пакетов с одинаковой секундой на часах.
     QVariantList list;
     for (const auto &capture : m_latestCaptures) list.append(capture);
     std::sort(list.begin(),list.end(),[](const QVariant &a,const QVariant &b) {
@@ -184,12 +203,17 @@ QVariantList Backend::latestCaptures() const {
     return list;
 }
 void Backend::flushUi() {
+    // Обработать пакет и перерисовать экран — разные операции. Показания
+    // обновляются в ingest сразу, а сигналы для QML объединяются здесь.
+    // Посторонние пакеты обновляют счётчик/эфир, но не список карточек.
     const bool captures=capturesPending,meters=metersPending;
     capturesPending=false; metersPending=false;
     if (captures) { emit capturesChanged(); emit packetCountChanged(); }
     if (meters) emit changed();
 }
 void Backend::setDemo(bool value) {
+    // Реальный и демонстрационный эфир имеют отдельные пространства ID.
+    // При переключении очищаются только захваты, а реальные карточки сохраняются.
     if (value==m_demo) return;
     stopScan();
     m_demo=value;
@@ -201,6 +225,8 @@ void Backend::setDemo(bool value) {
 }
 void Backend::toggleScan() { if (scanning() || wantedScan) stopScan(); else startScan(); }
 void Backend::startScan() {
+    // wantedScan фиксирует намерение пользователя, а scanning() — фактическую
+    // работу сканера. Пока нет активности или разрешения, запуск откладывается.
     if (scanning()) return;
     wantedScan=true;
     if (!isForeground) return;
@@ -220,8 +246,8 @@ void Backend::startScan() {
     }
 #ifdef Q_OS_ANDROID
     {
-        // Scan without neverForLocation: Android can otherwise hide beacons.
-        // No positioning API is used; permission is only for BLE discovery.
+        // Без neverForLocation Android не применяет связанную с этим флагом
+        // фильтрацию маяков. Разрешение запрашивается для BLE, координаты не читаем.
         QLocationPermission location;
         location.setAccuracy(QLocationPermission::Precise);
         if (qApp->checkPermission(location)!=Qt::PermissionStatus::Granted) {
@@ -262,6 +288,8 @@ void Backend::stopScan() {
     setStatus("Приём приостановлен");
 }
 void Backend::applicationActive(bool active) {
+    // Фоновое сканирование намеренно не поддерживается. При возврате запускаем
+    // приём только если пользователь ранее не нажал «Приостановить».
     isForeground=active;
     if (!active && dirty) { if (persist()) dirty=false; else setStatus("Не удалось сохранить показания"); }
     if (!active && wantedScan) {
@@ -274,6 +302,9 @@ void Backend::applicationActive(bool active) {
     } else if (active && wantedScan) startScan();
 }
 void Backend::processScanBatch(const QByteArray &json) {
+    // Граница Java/C++: Java передаёт небольшую JSON-порцию, а декодирование
+    // и изменение карточек выполняются уже в потоке Qt, без гонок с QML.
+    // В одной порции обрабатываем не более 256 записей, как и Java-сканер.
     const auto doc=QJsonDocument::fromJson(json);
     if (!doc.isObject()) { setStatus("Ошибка чтения данных Android BLE-сканера"); return; }
     const auto batch=doc.object();
@@ -306,6 +337,8 @@ void Backend::stopAndroidScan() {
     androidScanning=false;
 }
 void Backend::pollAndroidScan() {
+    // JNI используется для опроса, а не для вызова C++ из Android callback.
+    // Так поздний callback не сможет обратиться к уже уничтоженному Backend.
     auto batch=QJniObject::callStaticObjectMethod("org/codapkmeter/app/BleScanner","drain","()Ljava/lang/String;");
     if (clearJavaException() || !batch.isValid()) {
         stopAndroidScan(); wantedScan=false; setStatus("Ошибка связи с Android BLE-сканером"); return;
@@ -314,10 +347,9 @@ void Backend::pollAndroidScan() {
 }
 #endif
 void Backend::discovered(const QBluetoothDeviceInfo &info) {
-    // Discovery already runs with LowEnergyMethod. Android device type can be
-    // unknown even when manufacturer/service data arrived in a BLE callback.
-    // Accept the data independently of that metadata; protocol matching below
-    // decides whether the payload belongs to a supported meter.
+    // Наличие данных важнее вспомогательного признака типа устройства.
+    // Объявление без имени может иметь неизвестный тип, но валидный payload;
+    // принадлежность прибору проверит протокол, а не фильтр coreConfigurations.
     const auto manufacturer=info.manufacturerData();
     for (auto it=manufacturer.cbegin();it!=manufacturer.cend();++it) ingest("manufacturer",it.key(),{},it.value(),info.rssi(),info.address().toString());
     const auto services=info.serviceData();
@@ -328,6 +360,8 @@ int Backend::meterIndex(const QString &id) const {
     return -1;
 }
 void Backend::ingest(const QString &source, int company, const QString &service, const QByteArray &packet, int rssi, const QString &address) {
+    // Общая точка входа для Android, Qt и демо. packet не содержит заголовка AD
+    // и Company ID. Неизвестные форматы остаются видимыми в эфире без создания карточек.
     if (packet.isEmpty() || packet.size()>1650) return;
     if (m_packetCount<std::numeric_limits<int>::max()) ++m_packetCount;
     QVector<const Protocol *> matches;
@@ -342,8 +376,9 @@ void Backend::ingest(const QString &source, int company, const QString &service,
     capture["sequence"]=QVariant::fromValue(++captureSequence);
     m_captures.prepend(capture);
     if (m_captures.size()>200) m_captures.removeLast();
-    // Keep one latest packet per Company ID (or Service UUID), independently
-    // of the busy 200-event history. Repeated traffic cannot evict another ID.
+    // История событий и последний пакет ID независимы. Частые повторы одного
+    // производителя не вытесняют редкий ID из второго списка. Однако несколько
+    // приборов одного Company ID делят одну запись: это кэш ID, а не устройств.
     const QString captureId=source=="manufacturer" ? "m/"+QString::number(company) : "s/"+service.toLower();
     if (!m_latestCaptures.contains(captureId) && m_latestCaptures.size()>=1024) {
         auto oldest=m_latestCaptures.begin();
@@ -358,6 +393,8 @@ void Backend::ingest(const QString &source, int company, const QString &service,
     auto serial=protocol->identity(packet);
     if (serial.isEmpty()) return;
     auto id=(m_demo ? "demo/" : "real/")+protocol->id()+"/"+serial;
+    // Адрес Bluetooth не входит в ID карточки: случайные адреса устройства
+    // могут меняться. Устойчивость обеспечивает протокол и заводской идентификатор.
     auto result=protocol->decode(packet,m_demo ? demoKey : vault.get(id));
     int index=meterIndex(id);
     if (!result.ok && index<0 && protocol->json.value("decoder")=="eto-water-v2") return;
@@ -372,6 +409,8 @@ void Backend::ingest(const QString &source, int company, const QString &service,
     meter["kind"]=protocol->json.value("kind").toString();
     meter["mode"]=protocol->json.value("encryption").toObject().value("mode").toString();
     meter["demo"]=m_demo; meter["lastSeen"]=when(); meter["rssi"]=rssi;
+    // lastSeen — время приёма телефоном, в том числе архива/ошибочного пакета
+    // уже известного прибора. deviceTimestamp ниже относится к самому измерению.
     meter["lastPacketType"]=!result.ok ? "Ошибка пакета" : result.archived ? "Архив" : "Текущие показания";
     meter["packet"]=QString::fromLatin1(packet.toHex());
     meter["error"]=result.error; meter["valid"]=result.ok;
@@ -382,6 +421,9 @@ void Backend::ingest(const QString &source, int company, const QString &service,
             meter["unit"]=result.unit;
         }
         if (result.archived) {
+            // Архив хранится отдельно и не меняет текущее показание. Повтор
+            // записи определяется парой (время, тип); оставляем до 48 последних.
+            // Даже архив с UNIX-временем 0 не задаёт время текущего измерения.
             QVariantMap archive{{"timestamp",result.metadata.value("deviceTimestamp")},
                 {"time",result.metadata.value("deviceTime")},{"type",result.metadata.value("archiveType")},
                 {"typeName",result.metadata.value("archiveTypeName")},{"reading",result.reading},
@@ -408,6 +450,9 @@ void Backend::ingest(const QString &source, int company, const QString &service,
             const bool ordered=!result.metadata.contains("deviceTimestamp") || !meter.contains("deviceTimestamp")
                 || result.metadata.value("deviceTimestamp").toLongLong()>=meter.value("deviceTimestamp").toLongLong();
             if (ordered) {
+                // Более старый текущий пакет не должен откатывать показание.
+                // В историю графика попадает лишь изменение объёма, а время
+                // последнего приёма обновляется и при неизменном значении.
                 meter["hasReading"]=true; meter["reading"]=result.reading; meter["unit"]=result.unit;
                 meter["fields"]=result.fields; meter["battery"]=result.battery;
                 QString measuredAt=when();
@@ -431,6 +476,8 @@ void Backend::demoTick() {
 }
 
 void Backend::retryMeter(int index) {
+    // После изменения ключа повторяем разбор последнего сохранённого пакета.
+    // Архив здесь не превращается в текущее показание и не подменяет его поля.
     auto m=m_meters[index].toMap();
     for (const auto &p : m_protocols) if (p.id()==m.value("protocolId").toString()) {
         auto result=p.decode(QByteArray::fromHex(m.value("packet").toString().toLatin1()),vault.get(m.value("id").toString()));
@@ -468,6 +515,8 @@ QString Backend::renameMeter(const QString &id, const QString &name) {
     emit changed(); return {};
 }
 QString Backend::deleteMeter(const QString &id) {
+    // Удаление карточки считается успешным только после записи на диск.
+    // При сбое возвращаем запись на прежнее место, чтобы интерфейс не расходился с файлом.
     const int index=meterIndex(id);
     if (index<0) return "Прибор не найден";
     const auto old=m_meters.takeAt(index);
@@ -475,16 +524,19 @@ QString Backend::deleteMeter(const QString &id) {
         m_meters.insert(index,old);
         return "Не удалось сохранить удаление прибора";
     }
-    // Key management remains separate so rediscovery does not require a new key.
+    // Ключ удаляется отдельной командой. При новом приёме прибор появится снова
+    // и сможет использовать ранее сохранённый ключ.
     emit changed();
     return {};
 }
 QUrl Backend::suggestedExportFile() const {
+    // Предустановка имени не меняет состав экспорта: он содержит все карточки
+    // текущего режима. Число серийных номеров и их длина ограничены ради длины пути.
     const auto list=meters();
     QStringList serials;
     for (int i=0;i<list.size() && i<3;++i) {
         auto serial=list[i].toMap().value("serial").toString();
-        // A serial must never turn the suggested name into a path.
+        // Серийный номер не должен превращать имя в путь или содержать разделители.
         serial.replace(QRegularExpression("[^A-Za-z0-9_-]"),"_");
         serials.append(serial.isEmpty() ? QStringLiteral("без_номера") : serial.left(32));
     }
@@ -496,6 +548,8 @@ QUrl Backend::suggestedExportFile() const {
     return QUrl::fromLocalFile(QDir(folder).filePath(name));
 }
 QString Backend::exportReadings(const QUrl &url) const {
+    // Экспортируются показания и архивы без исходного пакета и вычисляемого
+    // возраста карточки. Ключи хранятся отдельно и в этот документ не включаются.
     QVariantList output;
     for (const auto &v : meters()) {
         auto m=v.toMap(); m.remove("packet"); m.remove("age"); m.remove("stale"); output.append(m);

@@ -2,7 +2,9 @@
 #include "protocol.h"
 #include <QVector>
 
-// Developer-controlled resource catalog: never loads external/user JSON files.
+// Каталог разработчика: загружает только JSON, встроенные в ресурсы при сборке.
+// Пользовательские файлы не читаются. validate запрещает неоднозначный выбор
+// обработчика, включая пересечение префиксов и моделей встроенного протокола ЭТО.
 class ProtocolCatalog {
 public:
     static bool load(QVector<Protocol> &out, QString &error);

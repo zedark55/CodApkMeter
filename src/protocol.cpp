@@ -25,9 +25,13 @@ int width(const QString &type, const QJsonObject &f) {
     return 0;
 }
 bool fits(int offset, int size, int total) { return offset >= 0 && size >= 0 && offset <= total && size <= total - offset; }
+// Проверка диапазона использует total - offset, чтобы сложение offset + size
+// не переполнилось до сравнения. Любое чтение поля должно предваряться fits().
 }
 
 bool Protocol::hex(const QString &text, QByteArray &out) {
+    // Разрешены пробельные разделители, но не произвольные символы: fromHex()
+    // сам по себе слишком терпим и мог бы незаметно пропустить ошибку ввода.
     QString s = text;
     s.remove(QRegularExpression("\\s"));
     if (s.size() % 2 || s.size() > 3300 || s.contains(QRegularExpression("[^0-9a-fA-F]"))) return false;
@@ -36,6 +40,8 @@ bool Protocol::hex(const QString &text, QByteArray &out) {
 }
 
 bool Protocol::parse(const QByteArray &data, Protocol &out, QString &error) {
+    // Это проверка схемы описания, а не конкретного радиопакета. Не доверяем
+    // числам из JSON: смещения должны быть целыми, масштабы — конечными.
     auto fail = [&](const QString &message) { error = message; return false; };
     if (data.size() > 65536) return fail("Описание протокола больше 64 КБ");
     QJsonParseError e;
@@ -51,6 +57,8 @@ bool Protocol::parse(const QByteArray &data, Protocol &out, QString &error) {
     if (source == "manufacturer" && !integer(o.value("companyId"), 0, 65535)) return fail("companyId: целое число 0–65535");
     if (source == "service" && QUuid(o.value("serviceUuid").toString()).isNull()) return fail("Укажите полный serviceUuid");
     if (o.contains("decoder")) {
+        // Нестандартный семейный протокол разбирается специализированным C++
+        // кодом. JSON лишь регистрирует его и не может сменить производителя/шифрование.
         if (o.value("decoder").toString()!="eto-water-v2") return fail("Неизвестный встроенный decoder");
         if (source!="manufacturer" || o.value("companyId").toInt()!=5775 || o.value("kind").toString()!="water"
             || o.value("encryption").toObject().value("mode").toString()!="none") return fail("ЭТО revision 2: manufacturer 5775, water, mode none");
@@ -61,6 +69,8 @@ bool Protocol::parse(const QByteArray &data, Protocol &out, QString &error) {
     const auto identity = o.value("identity").toObject();
     if (!integer(identity.value("offset"),0,1649) || !integer(identity.value("length"),1,32)) return fail("identity: offset 0–1649, length 1–32");
     const auto enc = o.value("encryption").toObject();
+    // length == -1 означает весь остаток выбранного блока; для CCM при разборе
+    // пакета из него дополнительно исключается тег проверки подлинности.
     const auto mode = enc.value("mode").toString();
     if (!QStringList{"none","aes-128-ctr","aes-128-ccm","aes-128-cbc"}.contains(mode)) return fail("encryption.mode: none, aes-128-ctr, aes-128-cbc или aes-128-ccm");
     if (!integer(enc.value("offset"),0,1649) || !integer(enc.value("length"),-1,1650) || enc.value("length").toInt() == 0) return fail("encryption: нужны offset и length (-1 = до конца)");
@@ -87,12 +97,16 @@ bool Protocol::parse(const QByteArray &data, Protocol &out, QString &error) {
         if (f.value("role") == "reading") ++readings;
     }
     if (readings != 1) return fail("Нужно ровно одно поле с role: reading");
+    // Ровно одно главное показание упрощает карточку и исключает неоднозначность
+    // при выборе значения для графика, экспорта и крупного числа на главном экране.
     out.json = o;
     error.clear();
     return true;
 }
 
 bool Protocol::matches(const QString &source, int company, const QString &service, const QByteArray &packet) const {
+    // Сначала проверяем пространство имён источника, затем распознающий признак.
+    // Один и тот же первый байт у разных производителей не делает форматы одинаковыми.
     if (json.value("source").toString() != source) return false;
     if (source == "manufacturer" && json.value("companyId").toInt() != company) return false;
     if (source == "service" && QUuid(json.value("serviceUuid").toString()) != QUuid(service)) return false;
@@ -101,6 +115,8 @@ bool Protocol::matches(const QString &source, int company, const QString &servic
 }
 
 QString Protocol::identity(const QByteArray &packet) const {
+    // У универсального формата ID — HEX указанного диапазона исходного пакета.
+    // ЭТО переопределяет это правило: модель + BCD-заводской номер с ведущими нулями.
     if (json.value("decoder")=="eto-water-v2") return EtoWater::identity(packet);
     auto i = json.value("identity").toObject();
     int offset = i.value("offset").toInt(), size = i.value("length").toInt();
@@ -108,6 +124,8 @@ QString Protocol::identity(const QByteArray &packet) const {
 }
 
 DecodeResult Protocol::decode(const QByteArray &packet, const QByteArray &key) const {
+    // До чтения проверяем границы блоков и длину ключа. Отсутствие исключения
+    // в криптобиблиотеке не заменяет валидацию формата и размера радиопакета.
     if (json.value("decoder")=="eto-water-v2") return EtoWater::decode(packet);
     DecodeResult result;
     auto fail = [&](const QString &message) { result.error = message; return result; };
@@ -127,6 +145,9 @@ DecodeResult Protocol::decode(const QByteArray &packet, const QByteArray &key) c
         QByteArray nonce = packet.mid(nonceOffset,nonceSize);
         int rc;
         if (mode == "aes-128-ctr") {
+            // CTR использует ключ шифрования и изменяемый счётчик nonce.
+            // Копия nonce нужна потому, что mbedTLS меняет её во время обработки.
+            // Этот режим сам по себе не проверяет правильность ключа и подлинность.
             mbedtls_aes_context aes;
             mbedtls_aes_init(&aes);
             rc = mbedtls_aes_setkey_enc(&aes,reinterpret_cast<const unsigned char *>(key.constData()),128);
@@ -136,6 +157,8 @@ DecodeResult Protocol::decode(const QByteArray &packet, const QByteArray &key) c
                 reinterpret_cast<const unsigned char *>(packet.constData()+offset),reinterpret_cast<unsigned char *>(plain.data()));
             mbedtls_aes_free(&aes);
         } else if (mode == "aes-128-cbc") {
+            // CBC требует целое число 16-байтовых блоков. Автоматического
+            // удаления padding здесь нет: поля описывают фактический plaintext.
             if (size%16) return fail("Длина AES-CBC должна быть кратна 16 байтам");
             mbedtls_aes_context aes;
             mbedtls_aes_init(&aes);
@@ -144,6 +167,8 @@ DecodeResult Protocol::decode(const QByteArray &packet, const QByteArray &key) c
                 reinterpret_cast<const unsigned char *>(packet.constData()+offset),reinterpret_cast<unsigned char *>(plain.data()));
             mbedtls_aes_free(&aes);
         } else {
+            // CCM проверяет тег вместе с расшифровкой. AAD — незашифрованный
+            // префикс пакета, который также защищается проверкой подлинности.
             int aad = enc.value("aadLength").toInt();
             if (!fits(0,aad,packet.size())) return fail("AAD выходит за границы пакета");
             mbedtls_ccm_context ccm;
@@ -159,6 +184,8 @@ DecodeResult Protocol::decode(const QByteArray &packet, const QByteArray &key) c
         if (rc) return fail("Ошибка расшифровки / проверки подлинности пакета");
     }
     for (const auto &v : json.value("fields").toArray()) {
+        // Смещения fields отсчитываются уже от plain. Порядок байтов меняет
+        // сборку исходного числа; scale применяется после восстановления типа.
         const auto f = v.toObject();
         const auto type = f.value("type").toString();
         int start = f.value("offset").toInt(), n = width(type,f);
@@ -167,6 +194,8 @@ DecodeResult Protocol::decode(const QByteArray &packet, const QByteArray &key) c
         quint32 raw = 0;
         double value = 0;
         if (type == "bcd") {
+            // В BCD каждая половина байта — отдельная десятичная цифра 0..9.
+            // Значения A..F означают повреждение данных или неверный формат.
             for (int i=0;i<n;i++) {
                 auto b = quint8(plain.at(start+(little ? n-1-i : i)));
                 if ((b>>4)>9 || (b&15)>9) return fail("Некорректное BCD поле");
@@ -176,6 +205,7 @@ DecodeResult Protocol::decode(const QByteArray &packet, const QByteArray &key) c
             for (int i=0;i<n;i++) raw = (raw<<8) | quint8(plain.at(start+(little ? n-1-i : i)));
             if (type == "i16") value = raw >= 0x8000 ? double(raw)-65536.0 : double(raw);
             else if (type == "i32") value = raw >= 0x80000000u ? double(raw)-4294967296.0 : double(raw);
+            // memcpy переносит битовый образ IEEE 754 без нарушения правил aliasing.
             else if (type == "float32") { float number; std::memcpy(&number,&raw,4); value = number; }
             else value = raw;
         }

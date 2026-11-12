@@ -6,6 +6,9 @@
 
 namespace {
 struct Model { quint8 code; const char *name; double volumeScale; int decimals; };
+// Цена деления задаётся в м³, decimals определяет отображение без потери разрядов.
+// Важное исключение таблицы моделей: Протей 50 имеет volumeScale 0.01,
+// хотя масштаб мгновенного расхода для него остаётся таким же, как у других Протей.
 const Model models[]={
     {0x01,"Протей 15, ДУ15",0.001,3}, {0x02,"Протей 20, ДУ20",0.001,3},
     {0x06,"Протей 50, ДУ50",0.01,2}, {0x09,"Протей 15-2, ДУ15",0.001,3},
@@ -26,6 +29,8 @@ const Model *model(const QByteArray &p) {
     return nullptr;
 }
 QString serial(const QByteArray &p) {
+    // Байты 1..4 содержат восемь BCD-цифр младшим байтом вперёд.
+    // Собираем строку, а не число: заводской номер может начинаться с нулей.
     if (p.size()<5) return {};
     QString result;
     for (int i=4;i>=1;i--) {
@@ -36,6 +41,8 @@ QString serial(const QByteArray &p) {
     return result;
 }
 QStringList statusText(quint16 status) {
+    // Номера битов в документации начинаются с 1, поэтому при создании маски
+    // вычитается единица. Неизвестные биты не теряем, а показываем отдельной HEX-маской.
     struct Flag { int bit; const char *text; };
     const Flag flags[]={
         {1,"Длительное воздействие внешнего магнитного поля"}, {2,"Был сброс по питанию"},
@@ -65,8 +72,9 @@ DecodeResult EtoWater::decode(const QByteArray &p) {
     auto fail=[&](const QString &error) { r.error=error; return r; };
     const auto m=model(p);
     if (!m) return fail("Неизвестная модель ЭТО / Протей / СВЭУ");
-    // Table 1: 27 manufacturer bytes; table 2: 22. The printed archive
-    // hex example on page 4 misses a status byte; do not repair it silently.
+    // По таблицам протокола: 27 байт для текущих данных и 22 для архива.
+    // В печатном архивном HEX-примере на стр. 4 пропущен байт состояния;
+    // усечённые пакеты не «исправляем» догадками и разбираем только точный формат.
     if (p.size()!=27 && p.size()!=22) return fail("ЭТО: ожидается 27 байт текущих или 22 байта архивных данных");
     const auto number=serial(p);
     if (number.isEmpty()) return fail("ЭТО: некорректный заводской номер BCD");
@@ -76,6 +84,9 @@ DecodeResult EtoWater::decode(const QByteArray &p) {
     const auto u16=[&](int offset) { return qFromLittleEndian<quint16>(p.constData()+offset); };
     const auto u32=[&](int offset) { return qFromLittleEndian<quint32>(p.constData()+offset); };
     const quint32 timestamp=u32(7);
+    // timestamp — секунды UNIX в UTC, tz — смещение для отображения времени прибора.
+    // Сдвинутое wall используется только как текст; для сравнения и сортировки
+    // сохраняется исходный timestamp. Это важно и для разрешённого UTC+15.
     const auto wall=QDateTime::fromSecsSinceEpoch(timestamp,QTimeZone::UTC).addSecs(tz*3600);
     const auto deviceTime=wall.toString("dd.MM.yyyy HH:mm:ss")+QString(" UTC+%1").arg(tz);
     const auto status=u16(19); const auto messages=statusText(status);
@@ -88,6 +99,8 @@ DecodeResult EtoWater::decode(const QByteArray &p) {
         {"deviceTime",deviceTime},{"statusCode",status},{"statusText",messages},
         {"readingDecimals",m->decimals},{"reverse",u32(15)*m->volumeScale}};
     auto add=[&](const QString &label,double value,const QString &unit,const QString &role="other",int decimals=0,const QString &text=QString()) {
+        // text используется для даты, серийного номера и расшифровки состояния.
+        // Числовое value остаётся доступно, но QML предпочитает подготовленный текст.
         QVariantMap f{{"label",label},{"value",value},{"unit",unit},{"role",role},{"decimals",decimals}};
         if (!text.isNull()) f["text"]=text;
         r.fields.append(f);
@@ -108,11 +121,11 @@ DecodeResult EtoWater::decode(const QByteArray &p) {
         r.battery=quint8(p[23]);
         add("Напряжение батареи",u16(21)*0.01,"В","other",2);
         add("Остаточная ёмкость",r.battery,"%","battery");
-        // The PDF does not define signed temperature encoding. Preserve the
-        // specified byte as unsigned instead of inventing negative semantics.
+        // Документ не задаёт знаковую кодировку температуры. Не приписываем
+        // старшему биту знак без подтверждения производителя, читаем байт как u8.
         add("Температура электронного блока",quint8(p[24]),"°C","temperature");
-        // Table 1 specifies flow independently from the volume scale:
-        // Protey: 1 l/h, SVEU: 0.1 l/h (including Protey 50's volume exception).
+        // Масштаб расхода задаётся отдельно от накопленного объёма:
+        // Протей — 1 л/ч на отсчёт, СВЭУ — 0.1 л/ч, включая исключение Протей 50.
         add("Мгновенный расход",u16(25)*(m->code>=0x40 ? 0.0001 : 0.001),"м³/ч","other",m->code>=0x40 ? 4 : 3);
     }
     r.ok=true; return r;

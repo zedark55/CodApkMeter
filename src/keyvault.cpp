@@ -7,6 +7,8 @@
 namespace {
 QJniObject context() { return QNativeInterface::QAndroidApplication::context(); }
 bool exception() {
+    // Исключение Java не должно оставаться ожидающим в JNI и ломать следующие
+    // вызовы. Ошибка возвращается вызывающему коду через false/пустое значение.
     QJniEnvironment env;
     if (!env->ExceptionCheck()) return false;
     env->ExceptionClear();
@@ -16,6 +18,8 @@ bool exception() {
 #endif
 
 QByteArray KeyVault::get(const QString &id) const {
+    // Через JNI передаём HEX-строку, на стороне C++ восстанавливаем 16 байт.
+    // Ключ не выводится в журнал и не становится свойством модели для QML.
 #ifdef Q_OS_ANDROID
     auto result = QJniObject::callStaticObjectMethod("org/codapkmeter/app/KeyVault", "get",+        "(Landroid/content/Context;Ljava/lang/String;)Ljava/lang/String;",
         context().object(), QJniObject::fromString(id).object<jstring>());
@@ -26,6 +30,8 @@ QByteArray KeyVault::get(const QString &id) const {
 #endif
 }
 bool KeyVault::put(const QString &id, const QByteArray &key) {
+    // Размер проверяется до вызова платформенного хранилища. Настольная ветка
+    // намеренно не имитирует постоянное защищённое хранилище Android.
     if (key.size()!=16) return false;
 #ifdef Q_OS_ANDROID
     jboolean ok = QJniObject::callStaticMethod<jboolean>("org/codapkmeter/app/KeyVault", "put",

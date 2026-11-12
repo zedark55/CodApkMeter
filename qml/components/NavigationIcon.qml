@@ -1,3 +1,5 @@
+// Компонент значка навигации. pageIndex выбирает рисунок, tint задаёт
+// активный/неактивный цвет без хранения собственного состояния выбранной страницы.
 import QtQuick
 
 Item {
@@ -7,7 +9,8 @@ Item {
     implicitWidth: 24
     implicitHeight: 24
 
-    // Preserve the existing air icon.
+    // Сохраняем прежний символ «Эфир». Остальные значки рисуются линиями,
+    // чтобы их вид не зависел от формы символов в системном шрифте Android.
     Text {
         visible: root.pageIndex === 1
         anchors.centerIn: parent
@@ -21,6 +24,8 @@ Item {
         onWidthChanged: requestPaint()
         onHeightChanged: requestPaint()
         onPaint: {
+            // Все координаты заданы на условной сетке 24×24 и масштабируются
+            // для бокового меню. requestPaint нужен при смене активного цвета.
             const ctx = getContext("2d")
             ctx.reset()
             ctx.scale(width / 24, height / 24)

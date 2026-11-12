@@ -7,6 +7,8 @@
 #include <QUuid>
 
 bool ProtocolCatalog::validate(const QVector<Protocol> &items, QString &error) {
+    // Проверяются не только одинаковые ID. Если один префикс начинается с другого,
+    // один пакет мог бы подойти двум обработчикам; такой каталог не принимаем.
     QSet<QString> ids;
     for (int i=0;i<items.size();i++) {
         const auto &p=items[i];
@@ -14,7 +16,7 @@ bool ProtocolCatalog::validate(const QVector<Protocol> &items, QString &error) {
         ids.insert(p.id());
         for (int j=0;j<i;j++) {
             const auto &other=items[j];
-            // Demo formats and production formats are separate namespaces.
+            // Учебные и реальные форматы никогда не выбираются одновременно.
             if (p.id().startsWith("demo-")!=other.id().startsWith("demo-")) continue;
             const auto &a=p.json; const auto &b=other.json;
             if (a.value("source")!=b.value("source")) continue;
@@ -23,6 +25,8 @@ bool ProtocolCatalog::validate(const QVector<Protocol> &items, QString &error) {
             QByteArray x,y; Protocol::hex(a.value("prefix").toString(),x); Protocol::hex(b.value("prefix").toString(),y);
             const bool nativeA=a.value("decoder")=="eto-water-v2",nativeB=b.value("decoder")=="eto-water-v2";
             if (nativeA || nativeB) {
+                // У ЭТО вместо единственного prefix — набор кодов моделей.
+                // Пересечение проверяем через тот же распознаватель, что используется в эфире.
                 if ((nativeA && nativeB) || EtoWater::matches(nativeA ? y : x)) {
                     error="Пересечение с моделями ЭТО: "+p.id()+" / "+other.id(); return false;
                 }
@@ -37,6 +41,8 @@ bool ProtocolCatalog::validate(const QVector<Protocol> &items, QString &error) {
 }
 
 bool ProtocolCatalog::load(QVector<Protocol> &out, QString &error) {
+    // Q_INIT_RESOURCE нужен также при линковке каталога из статической библиотеки.
+    // Новый протокол включается разработчиком через METER_PROTOCOL_FILES в CMake.
     static const bool initialized=[] { Q_INIT_RESOURCE(bundled_protocols); return true; }();
     Q_UNUSED(initialized);
     const QDir dir(":/meter/protocols");

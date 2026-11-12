@@ -1,3 +1,6 @@
+// Краткая карточка получает готовую модель meter и сообщает о нажатии сигналом tapped.
+// hasReading отличает настоящий нулевой объём от отсутствия текущих данных;
+// readingDecimals сохраняет точность модели счётчика. Время приёма берётся с телефона.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts

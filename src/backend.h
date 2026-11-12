@@ -8,6 +8,9 @@
 #include <QTimer>
 #include <QUrl>
 
+// Центральная модель приложения, доступная QML под именем backend.
+// Все изменения карточек выполняются в потоке Qt: Android передаёт данные
+// через ограниченную очередь, которую этот объект периодически опрашивает.
 class Backend : public QObject {
     Q_OBJECT
     Q_PROPERTY(QVariantList meters READ meters NOTIFY changed)
@@ -16,6 +19,8 @@ class Backend : public QObject {
     Q_PROPERTY(bool scanning READ scanning NOTIFY stateChanged)
     Q_PROPERTY(bool demo READ demo WRITE setDemo NOTIFY stateChanged)
     Q_PROPERTY(QString status READ status NOTIFY stateChanged)
+    // Счётчик имеет собственный сигнал: посторонний эфир не должен заставлять
+    // QML заново строить список приборов при каждом событии Bluetooth.
     Q_PROPERTY(int packetCount READ packetCount NOTIFY packetCountChanged)
     Q_PROPERTY(QString keyStorageInfo READ keyStorageInfo CONSTANT)
 public:
@@ -33,6 +38,8 @@ public:
     Q_INVOKABLE void toggleScan();
     Q_INVOKABLE void startScan();
     Q_INVOKABLE void stopScan();
+    // Методы возвращают пустую строку при успехе, иначе — сообщение для интерфейса.
+    // Управления каталогом протоколов здесь нет: он изменяется только разработчиком.
     Q_INVOKABLE QString saveKey(const QString &id, const QString &hex);
     Q_INVOKABLE QString forgetKey(const QString &id);
     Q_INVOKABLE QString renameMeter(const QString &id, const QString &name);
@@ -50,6 +57,8 @@ private:
     friend class BackendTests;
     friend class EtoUiTests;
     QBluetoothDeviceDiscoveryAgent agent;
+    // Назначения таймеров разделены: генерация демо, возраст карточек, запись
+    // показаний на диск и ограничение частоты уведомлений интерфейса.
     QTimer demoTimer;
     QTimer ageTimer;
     QTimer saveTimer;
@@ -62,6 +71,8 @@ private:
 #endif
     QVector<Protocol> m_protocols;
     QVariantList m_meters;
+    // Общая история ограничена 200 событиями. Отдельный кэш хранит последний
+    // пакет до 1024 Company ID / Service UUID, чтобы редкий ID не терялся в шуме.
     QVariantList m_captures;
     QHash<QString,QVariantMap> m_latestCaptures;
     quint64 captureSequence = 0;
@@ -69,9 +80,13 @@ private:
     bool metersPending = false;
     KeyVault vault;
     bool m_demo = false;
+    // Намерение пользователя слушать эфир сохраняется при сворачивании,
+    // хотя фактический сканер в фоне останавливается.
     bool wantedScan = false;
     bool isForeground = true;
     bool permissionPending = false;
+    // dirty означает, что показания изменились после последнего сохранения.
+    // storageError запрещает автоматически перезаписывать повреждённое хранилище.
     bool dirty = false;
     QString m_status = "Готов к приёму";
     QString storage;

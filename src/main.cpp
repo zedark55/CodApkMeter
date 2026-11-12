@@ -9,26 +9,33 @@
 
 int main(int argc, char *argv[]) {
     QGuiApplication app(argc,argv);
-    // Keep the legacy storage identity so installed readings remain available.
+    // Внутренние имена сохраняем для совместимости с папкой уже установленных
+    // показаний. Отображаемое название приложения задаётся отдельно.
     QCoreApplication::setApplicationName("CodApkMeter");
     QGuiApplication::setApplicationDisplayName(QStringLiteral("Хронос"));
     QCoreApplication::setOrganizationName("CodApkMeter");
     QCoreApplication::setApplicationVersion(QStringLiteral(METER_APP_VERSION));
+    // Один базовый стиль на всех платформах; цвета и оформление задаются в QML.
     QQuickStyle::setStyle("Basic");
     Backend backend;
     QQmlApplicationEngine engine;
     bool qmlWarnings=false;
     QObject::connect(&engine,&QQmlEngine::warnings,&app,[&](const QList<QQmlError> &) { qmlWarnings=true; });
+    // QML получает одну модель данных, а не отдельные экземпляры для каждой страницы.
+    // При потере активности backend сохраняет данные и приостанавливает сканирование.
     engine.rootContext()->setContextProperty("backend",&backend);
     QObject::connect(&engine,&QQmlApplicationEngine::objectCreationFailed,&app,[] { QCoreApplication::exit(1); },Qt::QueuedConnection);
     QObject::connect(&app,&QGuiApplication::applicationStateChanged,&backend,[&](Qt::ApplicationState state) { backend.applicationActive(state==Qt::ApplicationActive); });
     engine.loadFromModule("ChronosBluetoothApk","Main");
+    // Настольные параметры помогают проверить мобильную компоновку без телефона.
     if (app.arguments().contains("--mobile") && !engine.rootObjects().isEmpty()) {
         engine.rootObjects().first()->setProperty("width",420);
         engine.rootObjects().first()->setProperty("height",860);
     }
     if (app.arguments().contains("--demo")) backend.setDemo(true);
     const int smoke=app.arguments().indexOf("--smoke-test");
+    // Быстрая проверка запуска последовательно открывает страницы, отслеживает
+    // предупреждения QML и завершает процесс с кодом ошибки при нарушении условий.
     if (smoke>=0) {
         QTimer::singleShot(600,&app,[&] {
             if (engine.rootObjects().isEmpty()) { app.exit(2); return; }

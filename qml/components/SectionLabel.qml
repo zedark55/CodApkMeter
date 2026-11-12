@@ -1,3 +1,5 @@
+// Единый стиль небольших заголовков разделов. PlainText не позволяет
+// интерпретировать значения из данных как HTML-разметку.
 import QtQuick
 Text { textFormat: Text.PlainText;
     color: "#91a2b8"

@@ -5,6 +5,8 @@ import QtQuick.Dialogs
 import "components"
 
 ApplicationWindow {
+    // Корневое окно переключает настольную и мобильную компоновку по ширине.
+    // Данные и операции берутся из C++ backend, а не хранятся повторно в элементах UI.
     id: window
     width: 1100
     height: 860
@@ -28,6 +30,8 @@ ApplicationWindow {
     property string query: ""
     property string captureQuery: ""
     property var filteredCaptures: {
+        // Поиск применяется к выбранному представлению эфира. Префикс 0x
+        // и регистр не важны; короткий ID и вариант с ведущим нулём равнозначны.
         const query = captureQuery.trim().toUpperCase().replace(/^0X/, "")
         const captures = captureView.currentIndex === 0 ? backend.latestCaptures : backend.captures
         return captures.filter(function(capture) {
@@ -39,6 +43,8 @@ ApplicationWindow {
     }
     property string selectedId: ""
     property var selected: {
+        // Храним выбранный ID, а не копию карточки: открытая карточка получает
+        // новые значения при каждом пакетном уведомлении backend.changed.
         const list = backend.meters
         for (let i = 0; i < list.length; i++) if (list[i].id === selectedId) return list[i]
         return ({})
@@ -106,7 +112,8 @@ ApplicationWindow {
         }
         StackLayout {
             currentIndex: window.page; Layout.fillWidth: true; Layout.fillHeight: true
-            // Overview
+            // Обзор: поиск и фильтры меняют только отображение, а экспорт сохраняет
+            // все карточки текущего режима, независимо от выбранного фильтра.
             ScrollView {
                 id: overview
                 clip: true; contentWidth: availableWidth
@@ -193,7 +200,7 @@ ApplicationWindow {
                     }
                 }
             }
-            // Raw advertising events
+    // Необработанный эфир: последний пакет каждого ID либо короткая история событий.
             ColumnLayout {
                 spacing: 16
                 Text { textFormat: Text.PlainText; text: "Эфир"; color: "#f1f6ff"; font.pixelSize: 32; font.weight: Font.DemiBold }
@@ -291,7 +298,7 @@ ApplicationWindow {
                     Text { textFormat: Text.PlainText; anchors.centerIn: parent; width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; visible: captureList.count === 0; text: window.captureQuery.trim().length ? "Пакеты с таким ID не найдены." : "Пока тихо. Включите приём пакетов."; color: "#63758e"; font.pixelSize: 12 }
                 }
             }
-            // Settings
+            // Настройки приложения; пользовательского редактора протоколов здесь нет.
             ScrollView {
                 id: settings; clip: true; contentWidth: availableWidth
                 ColumnLayout {
@@ -321,6 +328,8 @@ ApplicationWindow {
 
     Rectangle {
         id: bottomNav; visible: !window.wide
+        // Равные области нажатия и нулевые отступы кнопок удерживают подписи
+        // по центрам трёх колонок независимо от длины текста и ширины телефона.
         anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
         height: 76; color: "#101a28"
         Rectangle { width: parent.width; height: 1; color: "#263345" }
@@ -350,6 +359,8 @@ ApplicationWindow {
 
     Popup {
         id: meterDialog; objectName: "meterDialog"; parent: Overlay.overlay; anchors.centerIn: parent
+        // Карточка показывает приём телефоном отдельно от времени измерения.
+        // Архивы перечисляются ниже и не подменяют крупное текущее показание.
         width: Math.min(window.width - 24, 530); height: Math.min(window.height - 32, 760)
         modal: true; padding: 24
         background: Panel { color: "#141e2c" }
@@ -371,6 +382,8 @@ ApplicationWindow {
                 Text { textFormat: Text.PlainText; visible: window.selected.error !== ""; text: window.selected.error || ""; color: "#f2c27a"; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 SectionLabel { text: "ИСТОРИЯ ПОКАЗАНИЙ" }
                 Canvas {
+                    // История содержит только изменения показаний. Масштаб графика
+                    // определяется минимумом/максимумом, а span не даёт делить на ноль.
                     id: chart; Layout.fillWidth: true; height: 100
                     property var samples: window.selected.history || []
                     onSamplesChanged: requestPaint()
@@ -438,6 +451,8 @@ ApplicationWindow {
     FileDialog { id: readingsExport; title: "Экспорт показаний"; fileMode: FileDialog.SaveFile; nameFilters: ["JSON (*.json)"]; defaultSuffix: "json"; onAccepted: window.notify(backend.exportReadings(selectedFile),"Показания экспортированы") }
     Dialog {
         id: deleteConfirmation; objectName: "deleteMeterConfirmation"
+        // Сохраняем ID и название в момент открытия подтверждения. Обновление
+        // выбранной карточки не должно незаметно поменять цель удаления.
         property string meterId: ""
         property string meterName: ""
         parent: Overlay.overlay; anchors.centerIn: parent

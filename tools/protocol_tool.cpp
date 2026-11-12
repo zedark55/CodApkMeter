@@ -6,6 +6,9 @@
 #include <QTextStream>
 
 int main(int argc,char *argv[]) {
+    // Утилита разработчика, не часть пользовательского Android-интерфейса.
+    // catalog показывает встроенные форматы, validate проверяет JSON/конфликты,
+    // test декодирует переданную полезную нагрузку по выбранному описанию.
     QCoreApplication app(argc,argv);
     QTextStream output(stdout),error(stderr),input(stdin);
     auto args=app.arguments();
@@ -38,9 +41,13 @@ int main(int argc,char *argv[]) {
     const auto &p=items.first();
     QByteArray packet,key;
     if (!Protocol::hex(args[3],packet) || packet.isEmpty()) return fail("Invalid packet HEX");
+    // Здесь нужен payload, например начиная с 64 для ЭТО. Полный блок
+    // «1E FF 8F 16 ...» сначала освобождается от длины, типа AD и Company ID.
     if (!p.matches(p.json.value("source").toString(),p.json.value("companyId").toInt(),p.json.value("serviceUuid").toString(),packet)) return fail("Packet prefix does not match protocol");
     const auto mode=p.json.value("encryption").toObject().value("mode").toString();
     if (mode!="none") {
+        // Ключ читается со stdin, чтобы он не попадал в аргументы процесса
+        // и историю команд. Сам ключ в результат проверки не печатается.
         error<<"AES-128 key HEX from stdin: "<<Qt::flush;
         if (!Protocol::hex(input.readLine(),key) || key.size()!=16) return fail("Expected 32 key HEX characters on stdin");
     }
