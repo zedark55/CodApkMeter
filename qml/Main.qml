@@ -194,9 +194,55 @@ ApplicationWindow {
                 }
                 ComboBox {
                     id: captureView; objectName: "captureView"
-                    Layout.fillWidth: true
+                    Layout.fillWidth: true; implicitHeight: 46
+                    leftPadding: 14; rightPadding: 40
                     model: ["Последние по ID", "Последние 200 событий"]
                     Accessible.name: "Режим просмотра эфира"
+                    contentItem: Text {
+                        textFormat: Text.PlainText; text: captureView.displayText
+                        color: "#e8eef7"; font.pixelSize: 13
+                        verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                    }
+                    indicator: Text {
+                        x: captureView.width - width - 14; anchors.verticalCenter: parent.verticalCenter
+                        text: "⌄"; color: "#83e4ce"; font.pixelSize: 22
+                        rotation: captureView.popup.visible ? 180 : 0
+                    }
+                    background: Rectangle {
+                        radius: 10; color: captureView.down ? "#202e40" : "#141e2c"
+                        border.color: captureView.activeFocus || captureView.popup.visible ? "#83e4ce" : "#243142"
+                    }
+                    delegate: ItemDelegate {
+                        required property int index
+                        required property string modelData
+                        width: captureView.width - 12; implicitHeight: 44
+                        highlighted: captureView.highlightedIndex === index
+                        contentItem: Text {
+                            textFormat: Text.PlainText; text: modelData
+                            color: captureView.currentIndex === index ? "#83e4ce" : "#dce5f2"
+                            font.pixelSize: 13; verticalAlignment: Text.AlignVCenter
+                            leftPadding: 8; rightPadding: 26; elide: Text.ElideRight
+                        }
+                        Text {
+                            anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter
+                            visible: captureView.currentIndex === index; text: "✓"; color: "#83e4ce"; font.pixelSize: 15
+                        }
+                        background: Rectangle {
+                            radius: 8
+                            color: highlighted ? "#2b4148" : captureView.currentIndex === index ? "#20353d" : "transparent"
+                        }
+                    }
+                    popup: Popup {
+                        y: captureView.height + 6; width: captureView.width; padding: 6
+                        implicitHeight: contentItem.implicitHeight + topPadding + bottomPadding
+                        contentItem: ListView {
+                            clip: true; implicitHeight: contentHeight
+                            model: captureView.popup.visible ? captureView.delegateModel : null
+                            currentIndex: captureView.highlightedIndex
+                            ScrollIndicator.vertical: ScrollIndicator { }
+                        }
+                        background: Rectangle { radius: 12; color: "#141e2c"; border.color: "#3a505e" }
+                    }
                 }
                 RowLayout {
                     Layout.fillWidth: true
@@ -270,18 +316,22 @@ ApplicationWindow {
         Rectangle { width: parent.width; height: 1; color: "#263345" }
         RowLayout {
             anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10; spacing: 0
+            uniformCellSizes: true
             Repeater {
                 model: ["Обзор", "Эфир", "Настройки"]
                 Button {
                     required property string modelData
                     required property int index
-                    Layout.fillWidth: true; Layout.fillHeight: true
+                    Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1
+                    padding: 0
                     onClicked: window.page = index
                     background: Rectangle { color: "transparent" }
-                    contentItem: ColumnLayout {
-                        spacing: 3
-                        Text { textFormat: Text.PlainText; text: ["◫", "◎", "⚙"][index]; color: window.page === index ? "#83e4ce" : "#63758e"; font.pixelSize: 21; Layout.alignment: Qt.AlignHCenter }
-                        Text { textFormat: Text.PlainText; text: modelData; color: window.page === index ? "#83e4ce" : "#91a2b8"; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
+                    contentItem: Item {
+                        Column {
+                            anchors.centerIn: parent; spacing: 3
+                            Text { textFormat: Text.PlainText; text: ["◫", "◎", "⚙"][index]; color: window.page === index ? "#83e4ce" : "#63758e"; font.pixelSize: 21; anchors.horizontalCenter: parent.horizontalCenter }
+                            Text { textFormat: Text.PlainText; text: modelData; color: window.page === index ? "#83e4ce" : "#91a2b8"; font.pixelSize: 9; anchors.horizontalCenter: parent.horizontalCenter }
+                        }
                     }
                 }
             }
