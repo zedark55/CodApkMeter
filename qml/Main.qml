@@ -298,14 +298,14 @@ ApplicationWindow {
                     width: settings.availableWidth; spacing: 20
                     Text { textFormat: Text.PlainText; text: "Всё под контролем"; color: "#f1f6ff"; font.pixelSize: window.wide ? 32 : 27; font.weight: Font.DemiBold }
                     Panel {
-                        Layout.fillWidth: true; implicitHeight: 118
+                        Layout.fillWidth: true; implicitHeight: demoControls.implicitHeight + 40
                         ColumnLayout {
+                            id: demoControls
                             anchors.fill: parent; anchors.margins: 20; spacing: 10
                             RowLayout {
                                 Text { textFormat: Text.PlainText; text: "Демонстрационный режим"; color: "#e8eef7"; font.pixelSize: 14; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                                 Switch { checked: backend.demo; onToggled: backend.demo = checked; Accessible.name: "Демонстрационный режим" }
                             }
-                            Text { textFormat: Text.PlainText; text: "Три виртуальных прибора. Пакеты проходят тот же AES-CCM декодер. Реальный Bluetooth в демо выключен."; color: "#91a2b8"; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                         }
                     }
                     SectionLabel { text: "ПРИВАТНОСТЬ И КЛЮЧИ" }
