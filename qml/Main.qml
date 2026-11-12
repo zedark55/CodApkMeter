@@ -116,7 +116,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         ColumnLayout {
                             spacing: 8
-                            Text { textFormat: Text.PlainText; text: "Ваши показания.\nВ одном месте."; color: "#f1f6ff"; font.pixelSize: window.wide ? 38 : 31; font.weight: Font.DemiBold; font.letterSpacing: -1; lineHeight: 1.1 }
+                            Text { textFormat: Text.PlainText; text: "Показания рядом"; color: "#f1f6ff"; font.pixelSize: window.wide ? 38 : 31; font.weight: Font.DemiBold; font.letterSpacing: -1; lineHeight: 1.1 }
                             Text { textFormat: Text.PlainText; text: "Приём данных по воздуху, без подключения."; color: "#91a2b8"; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                         }
                         Item { Layout.fillWidth: true; visible: window.wide }
