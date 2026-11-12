@@ -72,7 +72,11 @@ ApplicationWindow {
                     required property int index
                     Layout.fillWidth: true; implicitHeight: 46
                     onClicked: window.page = index
-                    contentItem: Text { textFormat: Text.PlainText; text: ["◫  ", "◎  ", "⚙  "][index] + modelData; color: window.page === index ? "#83e4ce" : "#91a2b8"; font.pixelSize: 13; verticalAlignment: Text.AlignVCenter; leftPadding: 12 }
+                    contentItem: RowLayout {
+                        spacing: 10
+                        NavigationIcon { pageIndex: index; tint: window.page === index ? "#83e4ce" : "#91a2b8"; Layout.leftMargin: 12; Layout.preferredWidth: 20; Layout.preferredHeight: 20 }
+                        Text { textFormat: Text.PlainText; text: modelData; color: window.page === index ? "#83e4ce" : "#91a2b8"; font.pixelSize: 13; Layout.fillWidth: true }
+                    }
                     background: Rectangle { radius: 10; color: window.page === index ? "#1b3537" : "transparent" }
                 }
             }
@@ -329,7 +333,7 @@ ApplicationWindow {
                     contentItem: Item {
                         Column {
                             anchors.centerIn: parent; spacing: 3
-                            Text { textFormat: Text.PlainText; text: ["◫", "◎", "⚙"][index]; color: window.page === index ? "#83e4ce" : "#63758e"; font.pixelSize: 21; anchors.horizontalCenter: parent.horizontalCenter }
+                            NavigationIcon { width: 24; height: 24; pageIndex: index; tint: window.page === index ? "#83e4ce" : "#63758e"; anchors.horizontalCenter: parent.horizontalCenter }
                             Text { textFormat: Text.PlainText; text: modelData; color: window.page === index ? "#83e4ce" : "#91a2b8"; font.pixelSize: 9; anchors.horizontalCenter: parent.horizontalCenter }
                         }
                     }

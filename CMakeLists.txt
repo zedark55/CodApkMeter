@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(ChronosBluetoothApk VERSION 0.1.10 LANGUAGES C CXX)
+project(ChronosBluetoothApk VERSION 0.1.11 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Quick QuickControls2 Bluetooth)
@@ -40,14 +40,15 @@ target_compile_definitions(ChronosBluetoothApk PRIVATE METER_APP_VERSION="${PROJ
 qt_add_qml_module(ChronosBluetoothApk URI ChronosBluetoothApk VERSION 1.0
     OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/qml/ChronosBluetoothApk"
     QML_FILES qml/Main.qml qml/components/Panel.qml qml/components/ActionButton.qml
-              qml/components/MetricCard.qml qml/components/SectionLabel.qml qml/components/FormField.qml)
+              qml/components/MetricCard.qml qml/components/SectionLabel.qml qml/components/FormField.qml
+              qml/components/NavigationIcon.qml)
 set_target_properties(ChronosBluetoothApk PROPERTIES
     QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android"
     QT_ANDROID_PACKAGE_NAME "org.codapkmeter.app"
     QT_ANDROID_MIN_SDK_VERSION 26
     QT_ANDROID_TARGET_SDK_VERSION 35
     QT_ANDROID_VERSION_NAME "${PROJECT_VERSION}"
-    QT_ANDROID_VERSION_CODE 11)
+    QT_ANDROID_VERSION_CODE 12)
 if(ANDROID)
     # New or edited package assets must invalidate the APK, including files
     # absent from androiddeployqt's previous dependency file.
