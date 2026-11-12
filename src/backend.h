@@ -38,6 +38,7 @@ public:
     Q_INVOKABLE QString renameMeter(const QString &id, const QString &name);
     Q_INVOKABLE QString deleteMeter(const QString &id);
     Q_INVOKABLE QString exportReadings(const QUrl &url) const;
+    Q_INVOKABLE QUrl suggestedExportFile() const;
     Q_INVOKABLE void clearCaptures();
     void applicationActive(bool active);
 signals:

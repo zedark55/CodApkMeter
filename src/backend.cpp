@@ -12,6 +12,7 @@
 #include <QLocationPermission>
 #include <QPermissions>
 #include <QRandomGenerator>
+#include <QRegularExpression>
 #include <QtEndian>
 #include <mbedtls/ccm.h>
 #include <limits>
@@ -477,6 +478,22 @@ QString Backend::deleteMeter(const QString &id) {
     // Key management remains separate so rediscovery does not require a new key.
     emit changed();
     return {};
+}
+QUrl Backend::suggestedExportFile() const {
+    const auto list=meters();
+    QStringList serials;
+    for (int i=0;i<list.size() && i<3;++i) {
+        auto serial=list[i].toMap().value("serial").toString();
+        // A serial must never turn the suggested name into a path.
+        serial.replace(QRegularExpression("[^A-Za-z0-9_-]"),"_");
+        serials.append(serial.isEmpty() ? QStringLiteral("без_номера") : serial.left(32));
+    }
+    QString name=QStringLiteral("Хронос_")+(serials.isEmpty() ? QStringLiteral("показания") : serials.join('_'));
+    if (list.size()>3) name+=QStringLiteral("_и_ещё_%1").arg(list.size()-3);
+    name+="_"+QDate::currentDate().toString("yyyy-MM-dd")+".json";
+    auto folder=QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    if (folder.isEmpty()) folder=QDir::homePath();
+    return QUrl::fromLocalFile(QDir(folder).filePath(name));
 }
 QString Backend::exportReadings(const QUrl &url) const {
     QVariantList output;

@@ -183,7 +183,13 @@ ApplicationWindow {
                     RowLayout {
                         Layout.fillWidth: true
                         Text { textFormat: Text.PlainText; text: "Локально. Без облака. Ваши данные у вас."; color: "#63758e"; font.pixelSize: 10; Layout.fillWidth: true; wrapMode: Text.WordWrap }
-                        Button { text: "Экспорт ↗"; flat: true; onClicked: readingsExport.open(); palette.buttonText: "#83e4ce" }
+                        Button {
+                            text: "Экспорт ↗"; flat: true; palette.buttonText: "#83e4ce"
+                            onClicked: {
+                                readingsExport.selectedFile = backend.suggestedExportFile()
+                                readingsExport.open()
+                            }
+                        }
                     }
                 }
             }
