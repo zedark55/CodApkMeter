@@ -483,7 +483,7 @@ QString Backend::exportReadings(const QUrl &url) const {
     for (const auto &v : meters()) {
         auto m=v.toMap(); m.remove("packet"); m.remove("age"); m.remove("stale"); output.append(m);
     }
-    QJsonObject doc{{"application","ChronosBluetoothApk"},{"version",1},{"exportedAt",when()},{"demo",m_demo},{"meters",QJsonArray::fromVariantList(output)}};
+    QJsonObject doc{{"application","Хронос"},{"version",1},{"exportedAt",when()},{"demo",m_demo},{"meters",QJsonArray::fromVariantList(output)}};
     return writeSelected(url,QJsonDocument(doc).toJson()) ? QString() : "Не удалось экспортировать показания";
 }
 void Backend::clearCaptures() {

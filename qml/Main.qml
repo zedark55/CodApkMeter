@@ -61,7 +61,7 @@ ApplicationWindow {
             RowLayout {
                 Layout.topMargin: 12; spacing: 9
                 Rectangle { width: 30; height: 30; radius: 9; color: "#83e4ce"; Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: "≈"; color: "#123c36"; font.pixelSize: 25 } }
-                Text { textFormat: Text.PlainText; text: "Chronos"; color: "#f1f6ff"; font.pixelSize: 26; font.weight: Font.DemiBold; font.letterSpacing: -1 }
+                Text { textFormat: Text.PlainText; text: "Хронос"; color: "#f1f6ff"; font.pixelSize: 26; font.weight: Font.DemiBold; font.letterSpacing: -1 }
                 Rectangle { width: 5; height: 5; radius: 3; color: "#83e4ce"; Layout.alignment: Qt.AlignBottom; Layout.bottomMargin: 6 }
             }
             SectionLabel { text: "BLUETOOTH LE"; Layout.topMargin: 6; Layout.bottomMargin: 38; font.pixelSize: 9 }
@@ -91,7 +91,7 @@ ApplicationWindow {
         spacing: 20
         RowLayout {
             Layout.fillWidth: true; Layout.topMargin: 5
-            Text { textFormat: Text.PlainText; text: window.wide ? "МОЙ ОБЪЕКТ  /  ПРИБОРЫ УЧЁТА" : "Chronos"; color: window.wide ? "#91a2b8" : "#83e4ce"; font.pixelSize: window.wide ? 10 : 24; font.weight: Font.DemiBold; font.letterSpacing: window.wide ? 1.5 : -1 }
+            Text { textFormat: Text.PlainText; text: window.wide ? "МОЙ ОБЪЕКТ  /  ПРИБОРЫ УЧЁТА" : "Хронос"; color: window.wide ? "#91a2b8" : "#83e4ce"; font.pixelSize: window.wide ? 10 : 24; font.weight: Font.DemiBold; font.letterSpacing: window.wide ? 1.5 : -1 }
             Item { Layout.fillWidth: true }
             Rectangle { width: 7; height: 7; radius: 4; color: backend.scanning ? "#83e4ce" : "#63758e"; opacity: backend.scanning ? 1 : 0.6; SequentialAnimation on opacity { running: backend.scanning; loops: Animation.Infinite; NumberAnimation { to: 0.35; duration: 950 } NumberAnimation { to: 1; duration: 950 } } }
             Text { textFormat: Text.PlainText; text: backend.demo ? "ДЕМО" : backend.scanning ? "LIVE" : "ПАУЗА"; color: backend.demo ? "#f2c27a" : "#91a2b8"; font.pixelSize: 10; font.weight: Font.DemiBold }
