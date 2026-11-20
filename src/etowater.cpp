@@ -71,15 +71,15 @@ DecodeResult EtoWater::decode(const QByteArray &p) {
     DecodeResult r;
     auto fail=[&](const QString &error) { r.error=error; return r; };
     const auto m=model(p);
-    if (!m) return fail("Неизвестная модель ЭТО / Протей / СВЭУ");
+    if (!m) return fail("Неизвестная модель ETO / Протей / СВЭУ");
     // По таблицам протокола: 27 байт для текущих данных и 22 для архива.
     // В печатном архивном HEX-примере на стр. 4 пропущен байт состояния;
     // усечённые пакеты не «исправляем» догадками и разбираем только точный формат.
-    if (p.size()!=27 && p.size()!=22) return fail("ЭТО: ожидается 27 байт текущих или 22 байта архивных данных");
+    if (p.size()!=27 && p.size()!=22) return fail("ETO: ожидается 27 байт текущих или 22 байта архивных данных");
     const auto number=serial(p);
-    if (number.isEmpty()) return fail("ЭТО: некорректный заводской номер BCD");
+    if (number.isEmpty()) return fail("ETO: некорректный заводской номер BCD");
     const auto tz=quint8(p[6]);
-    if (tz>15) return fail("ЭТО: часовой пояс должен быть UTC+0…UTC+15");
+    if (tz>15) return fail("ETO: часовой пояс должен быть UTC+0…UTC+15");
     r.archived=p.size()==22;
     const auto u16=[&](int offset) { return qFromLittleEndian<quint16>(p.constData()+offset); };
     const auto u32=[&](int offset) { return qFromLittleEndian<quint32>(p.constData()+offset); };
@@ -91,8 +91,8 @@ DecodeResult EtoWater::decode(const QByteArray &p) {
     const auto deviceTime=wall.toString("dd.MM.yyyy HH:mm:ss")+QString(" UTC+%1").arg(tz);
     const auto status=u16(19); const auto messages=statusText(status);
     const QStringList archiveNames={"На начало часа","На начало суток","На начало месяца"};
-    if (r.archived && quint8(p[21])>2) return fail("ЭТО: неизвестный тип архивных данных");
-    if (!r.archived && quint8(p[23])>100) return fail("ЭТО: заряд батареи вне диапазона 0–100%");
+    if (r.archived && quint8(p[21])>2) return fail("ETO: неизвестный тип архивных данных");
+    if (!r.archived && quint8(p[23])>100) return fail("ETO: заряд батареи вне диапазона 0–100%");
     r.reading=u32(11)*m->volumeScale; r.unit="м³";
     r.metadata={{"modelName",QString::fromUtf8(m->name)},{"modelCode",m->code},{"serial",number},
         {"software",quint8(p[5])},{"timezoneHours",tz},{"deviceTimestamp",qint64(timestamp)},

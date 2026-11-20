@@ -41,7 +41,7 @@ int main(int argc,char *argv[]) {
     const auto &p=items.first();
     QByteArray packet,key;
     if (!Protocol::hex(args[3],packet) || packet.isEmpty()) return fail("Invalid packet HEX");
-    // Здесь нужен payload, например начиная с 64 для ЭТО. Полный блок
+    // Здесь нужен payload, например начиная с 64 для ETO. Полный блок
     // «1E FF 8F 16 ...» сначала освобождается от длины, типа AD и Company ID.
     if (!p.matches(p.json.value("source").toString(),p.json.value("companyId").toInt(),p.json.value("serviceUuid").toString(),packet)) return fail("Packet prefix does not match protocol");
     const auto mode=p.json.value("encryption").toObject().value("mode").toString();

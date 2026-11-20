@@ -159,7 +159,12 @@ void Backend::load() {
             auto m=v.toObject().toVariantMap();
             if (!m.value("id").toString().isEmpty() && !m.value("demo").toBool()) {
                 bool supported=false;
-                for (const auto &p : m_protocols) if (!p.id().startsWith("demo-") && p.id()==m.value("protocolId").toString()) supported=true;
+                // Служебное название берём из текущего каталога: оно могло быть
+                // переименовано в новой версии. Пользовательское имя карточки не меняем.
+                for (const auto &p : m_protocols) if (!p.id().startsWith("demo-") && p.id()==m.value("protocolId").toString()) {
+                    supported=true;
+                    m["protocolName"]=p.name();
+                }
                 if (!supported) { m["valid"]=false; m["error"]="Протокол прибора не поддерживается этой версией приложения"; }
                 m_meters.append(m);
             }

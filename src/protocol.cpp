@@ -61,7 +61,7 @@ bool Protocol::parse(const QByteArray &data, Protocol &out, QString &error) {
         // кодом. JSON лишь регистрирует его и не может сменить производителя/шифрование.
         if (o.value("decoder").toString()!="eto-water-v2") return fail("Неизвестный встроенный decoder");
         if (source!="manufacturer" || o.value("companyId").toInt()!=5775 || o.value("kind").toString()!="water"
-            || o.value("encryption").toObject().value("mode").toString()!="none") return fail("ЭТО revision 2: manufacturer 5775, water, mode none");
+            || o.value("encryption").toObject().value("mode").toString()!="none") return fail("ETO revision 2: manufacturer 5775, water, mode none");
         out.json=o; error.clear(); return true;
     }
     QByteArray prefix;
@@ -116,7 +116,7 @@ bool Protocol::matches(const QString &source, int company, const QString &servic
 
 QString Protocol::identity(const QByteArray &packet) const {
     // У универсального формата ID — HEX указанного диапазона исходного пакета.
-    // ЭТО переопределяет это правило: модель + BCD-заводской номер с ведущими нулями.
+    // ETO переопределяет это правило: модель + BCD-заводской номер с ведущими нулями.
     if (json.value("decoder")=="eto-water-v2") return EtoWater::identity(packet);
     auto i = json.value("identity").toObject();
     int offset = i.value("offset").toInt(), size = i.value("length").toInt();

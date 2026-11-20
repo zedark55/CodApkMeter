@@ -25,10 +25,10 @@ bool ProtocolCatalog::validate(const QVector<Protocol> &items, QString &error) {
             QByteArray x,y; Protocol::hex(a.value("prefix").toString(),x); Protocol::hex(b.value("prefix").toString(),y);
             const bool nativeA=a.value("decoder")=="eto-water-v2",nativeB=b.value("decoder")=="eto-water-v2";
             if (nativeA || nativeB) {
-                // У ЭТО вместо единственного prefix — набор кодов моделей.
+                // У ETO вместо единственного prefix — набор кодов моделей.
                 // Пересечение проверяем через тот же распознаватель, что используется в эфире.
                 if ((nativeA && nativeB) || EtoWater::matches(nativeA ? y : x)) {
-                    error="Пересечение с моделями ЭТО: "+p.id()+" / "+other.id(); return false;
+                    error="Пересечение с моделями ETO: "+p.id()+" / "+other.id(); return false;
                 }
                 continue;
             }
