@@ -200,18 +200,19 @@ ApplicationWindow {
                     }
                 }
             }
-    // Необработанный эфир: последний пакет каждого ID либо короткая история событий.
+            // Компактная верхняя часть оставляет основную высоту экрана событиям.
+            // Необработанный эфир: последний пакет каждого ID либо история событий.
             ColumnLayout {
-                spacing: 16
-                Text { textFormat: Text.PlainText; text: "Эфир"; color: "#f1f6ff"; font.pixelSize: 32; font.weight: Font.DemiBold }
-                Text { textFormat: Text.PlainText; text: "Последний пакет каждого Company ID или Service UUID сохраняется отдельно: до 1024 ID за сеанс. История — последние 200 событий. Список обновляется порциями каждые 250 мс при поступлении данных."; color: "#91a2b8"; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                spacing: 8
+                Text { textFormat: Text.PlainText; text: "Эфир"; color: "#f1f6ff"; font.pixelSize: 28; font.weight: Font.DemiBold }
+                Text { textFormat: Text.PlainText; text: "Последние пакеты по ID или история 200 событий"; color: "#91a2b8"; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 RowLayout {
-                    ActionButton { text: backend.scanning ? "Пауза" : "Начать приём"; onClicked: backend.toggleScan() }
-                    ActionButton { text: "Очистить"; secondary: true; onClicked: backend.clearCaptures() }
+                    ActionButton { text: backend.scanning ? "Пауза" : "Начать приём"; implicitHeight: 38; onClicked: backend.toggleScan() }
+                    ActionButton { text: "Очистить"; implicitHeight: 38; secondary: true; onClicked: backend.clearCaptures() }
                 }
                 ComboBox {
                     id: captureView; objectName: "captureView"
-                    Layout.fillWidth: true; implicitHeight: 46
+                    Layout.fillWidth: true; implicitHeight: 38
                     leftPadding: 14; rightPadding: 40
                     model: ["Последние по ID", "Последние 200 событий"]
                     Accessible.name: "Режим просмотра эфира"
@@ -265,31 +266,31 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     TextField {
                         id: captureSearch
-                        Layout.fillWidth: true; implicitHeight: 42
+                        Layout.fillWidth: true; implicitHeight: 38
                         placeholderText: "Поиск по ID: 168F, 5D6 или 0x05D6"
                         Accessible.name: "Поиск в эфире по Company ID"
                         color: "#e8eef7"; placeholderTextColor: "#63758e"; font.pixelSize: 12; selectByMouse: true
                         onTextChanged: window.captureQuery = text
                         background: Rectangle { radius: 10; color: "#141e2c"; border.color: captureSearch.activeFocus ? "#83e4ce" : "#243142" }
                     }
-                    ActionButton { text: "Сбросить"; secondary: true; visible: captureSearch.text.length > 0; onClicked: captureSearch.clear() }
+                    ActionButton { text: "Сбросить"; implicitHeight: 38; secondary: true; visible: captureSearch.text.length > 0; onClicked: captureSearch.clear() }
                 }
-                Text { textFormat: Text.PlainText; text: backend.status; color: "#83e4ce"; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                Text { textFormat: Text.PlainText; text: backend.status; color: "#83e4ce"; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                 Text { textFormat: Text.PlainText; text: "Событий приёма: " + backend.packetCount + " · показано: " + window.filteredCaptures.length; color: "#63758e"; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                 ListView {
-                    id: captureList; Layout.fillWidth: true; Layout.fillHeight: true; clip: true; spacing: 10; model: window.filteredCaptures
+                    id: captureList; Layout.fillWidth: true; Layout.fillHeight: true; clip: true; spacing: 6; model: window.filteredCaptures
                     delegate: Panel {
                         required property var modelData
-                        width: captureList.width; implicitHeight: captureColumn.implicitHeight + 28
+                        width: captureList.width; implicitHeight: captureColumn.implicitHeight + 20; radius: 14
                         ColumnLayout {
-                            id: captureColumn; anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 14; spacing: 8
+                            id: captureColumn; anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 10; spacing: 5
                             RowLayout {
                                 Layout.fillWidth: true
-                                Text { textFormat: Text.PlainText; text: modelData.time + "  ·  " + modelData.rssi + " dBm"; color: "#83e4ce"; font.pixelSize: 11 }
+                                Text { textFormat: Text.PlainText; text: modelData.time + "  ·  " + modelData.rssi + " dBm"; color: "#83e4ce"; font.pixelSize: 10 }
                                 Item { Layout.fillWidth: true }
                                 Text { textFormat: Text.PlainText; text: modelData.source === "manufacturer" ? "ID " + modelData.company.toString(16).toUpperCase() : "SERVICE"; color: "#91a2b8"; font.pixelSize: 10 }
                             }
-                            Text { textFormat: Text.PlainText; text: modelData.protocol; color: "#dce5f2"; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                            Text { textFormat: Text.PlainText; text: modelData.protocol; color: "#dce5f2"; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                             Text { textFormat: Text.PlainText; text: "Адрес: " + (modelData.address || "—"); color: "#91a2b8"; font.pixelSize: 10; Layout.fillWidth: true; wrapMode: Text.WrapAnywhere }
                             Text { textFormat: Text.PlainText; visible: modelData.source === "service"; text: modelData.service; color: "#91a2b8"; font.pixelSize: 10; Layout.fillWidth: true; wrapMode: Text.WrapAnywhere }
                             TextArea { textFormat: TextEdit.PlainText; text: modelData.hex; readOnly: true; selectByMouse: true; wrapMode: TextEdit.WrapAnywhere; color: "#91a2b8"; font.family: "monospace"; font.pixelSize: 11; Layout.fillWidth: true; padding: 0; background: null }
@@ -366,6 +367,22 @@ ApplicationWindow {
         background: Panel { color: "#141e2c" }
         ScrollView {
             id: detailScroll; anchors.fill: parent; contentWidth: availableWidth; clip: true
+            // Расширяем область вправо, но резервируем ту же ширину как padding:
+            // текст сохраняет свою ширину, а полоса получает отдельный правый канал.
+            anchors.rightMargin: -14
+            rightPadding: 14
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+            ScrollBar.vertical: ScrollBar {
+                parent: detailScroll
+                x: detailScroll.width - width; y: 0
+                width: 6; height: detailScroll.height; padding: 0
+                policy: ScrollBar.AsNeeded
+                contentItem: Rectangle {
+                    implicitWidth: 6; implicitHeight: 32; radius: 3
+                    color: parent.active || parent.hovered ? "#83e4ce" : "#3a505e"
+                }
+                background: null
+            }
             ColumnLayout {
                 width: detailScroll.availableWidth; spacing: 18
                 RowLayout {
