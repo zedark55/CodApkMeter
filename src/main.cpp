@@ -33,6 +33,16 @@ int main(int argc, char *argv[]) {
         engine.rootObjects().first()->setProperty("height",860);
     }
     if (app.arguments().contains("--demo")) backend.setDemo(true);
+    // Запускаем реальный поиск один раз после создания интерфейса и входа
+    // в цикл событий. Разрешения запрашивает Backend; если приложение ещё
+    // не активно, поиск начнётся при переходе в активное состояние.
+    // Демо уже запускается в setDemo, а ручная пауза не отменяется при возврате.
+    if (!backend.demo() && !engine.rootObjects().isEmpty()) {
+        QTimer::singleShot(0,&backend,[&] {
+            backend.applicationActive(app.applicationState()==Qt::ApplicationActive);
+            backend.startScan();
+        });
+    }
     const int smoke=app.arguments().indexOf("--smoke-test");
     // Быстрая проверка запуска последовательно открывает страницы, отслеживает
     // предупреждения QML и завершает процесс с кодом ошибки при нарушении условий.
