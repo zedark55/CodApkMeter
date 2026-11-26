@@ -124,7 +124,7 @@ ApplicationWindow {
                         ColumnLayout {
                             spacing: 8
                             Text { textFormat: Text.PlainText; text: "Показания рядом"; color: "#f1f6ff"; font.pixelSize: window.wide ? 38 : 31; font.weight: Font.DemiBold; font.letterSpacing: -1; lineHeight: 1.1 }
-                            Text { textFormat: Text.PlainText; text: "Приём данных по воздуху, без подключения."; color: "#91a2b8"; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                            Text { textFormat: Text.PlainText; text: "Широковещательный приём без подключения"; color: "#91a2b8"; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                         }
                         Item { Layout.fillWidth: true; visible: window.wide }
                         Rectangle {
@@ -393,6 +393,8 @@ ApplicationWindow {
                 }
                 Text { textFormat: Text.PlainText; text: window.selected.name || ""; color: "#f1f6ff"; font.pixelSize: 25; font.weight: Font.DemiBold; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 Text { textFormat: Text.PlainText; text: "ID " + (window.selected.serial || "") + "  ·  " + (window.selected.protocolName || ""); color: "#91a2b8"; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                Text { textFormat: Text.PlainText; text: "Адрес Bluetooth: " + (window.selected.address || "—"); color: "#91a2b8"; font.pixelSize: 12; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true }
+                Text { textFormat: Text.PlainText; text: "Уровень сигнала (RSSI): " + (window.selected.rssi === undefined ? "—" : window.selected.rssi + " dBm"); color: "#91a2b8"; font.pixelSize: 12; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 Text { textFormat: Text.PlainText; text: window.selected.hasReading ? Number(window.selected.reading).toLocaleString(Qt.locale("ru_RU"),'f',window.selected.readingDecimals === undefined ? 3 : window.selected.readingDecimals) + " " + window.selected.unit : "Нет показаний"; color: "#83e4ce"; font.pixelSize: 32; font.weight: Font.DemiBold; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                 Text { textFormat: Text.PlainText; text: "Последний приём на телефоне: " + (window.selected.lastReceivedAt || "—") + " · " + (window.selected.lastPacketType || "Пакет"); color: "#83e4ce"; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 Text { textFormat: Text.PlainText; text: "Время текущего показания: " + (window.selected.deviceTime || window.selected.lastReadingAt || "—"); color: "#91a2b8"; font.pixelSize: 10; wrapMode: Text.WordWrap; Layout.fillWidth: true }

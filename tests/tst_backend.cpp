@@ -117,7 +117,11 @@ private slots:
             QCOMPARE(b.meters().size(),1);
             auto m=b.meters().first().toMap(); QVERIFY(m.value("valid").toBool());
             QCOMPARE(m.value("reading").toDouble(),123.456); id=m.value("id").toString();
+            QCOMPARE(m.value("address").toString(),QString("AA:BB:CC:DD:EE:01"));
             b.ingest("manufacturer",123,{},packet(),-60,"AA:BB:CC:DD:EE:02");
+            QCOMPARE(b.meters().first().toMap().value("address").toString(),QString("AA:BB:CC:DD:EE:02"));
+            b.ingest("manufacturer",123,{},packet(),-60,{});
+            QCOMPARE(b.meters().first().toMap().value("address").toString(),QString("AA:BB:CC:DD:EE:02"));
             QCOMPARE(b.meters().size(),1); QCOMPARE(b.meters().first().toMap().value("history").toList().size(),1);
             QCOMPARE(b.renameMeter(id,"Кухня"),QString());
         }
@@ -125,6 +129,8 @@ private slots:
         QCOMPARE(reloaded.meters().size(),1);
         auto m=reloaded.meters().first().toMap();
         QCOMPARE(m.value("name").toString(),QString("Кухня"));
+        QCOMPARE(m.value("address").toString(),QString("AA:BB:CC:DD:EE:02"));
+        QCOMPARE(m.value("rssi").toInt(),-60);
         QCOMPARE(m.value("reading").toDouble(),123.456);
         // Old readings survive, but a missing compiled protocol is not trusted.
         QVERIFY(!m.value("valid").toBool()); QVERIFY(m.value("hasReading").toBool());

@@ -83,8 +83,8 @@ private slots:
         QTemporaryDir temp; QVERIFY(temp.isValid()); qputenv("XDG_DATA_HOME",temp.path().toUtf8());
         QQuickStyle::setStyle("Basic");
         Backend b;
-        b.ingest("manufacturer",5775,{},QByteArray::fromHex("64785634120605f1cae16a40e20100db030000020037015a1be803"),-55,{});
-        b.ingest("manufacturer",5775,{},QByteArray::fromHex("64785634120605a0e6e06a40e20100db030000c00001"),-56,{});
+        b.ingest("manufacturer",5775,{},QByteArray::fromHex("64785634120605f1cae16a40e20100db030000020037015a1be803"),-55,"2B:80:03:42:8B:90");
+        b.ingest("manufacturer",5775,{},QByteArray::fromHex("64785634120605a0e6e06a40e20100db030000c00001"),-56,"2B:80:03:42:8B:91");
         QQmlApplicationEngine engine; QStringList warnings;
         connect(&engine,&QQmlEngine::warnings,this,[&](const QList<QQmlError> &errors) {
             for (const auto &e : errors) warnings.append(e.toString());
@@ -105,6 +105,8 @@ private slots:
         QVERIFY(!text.contains("NaN")); QVERIFY(!text.contains("КЛЮЧ AES-128"));
         QVERIFY(text.contains("Последний приём на телефоне:"));
         QVERIFY(text.contains("Время текущего показания:"));
+        QVERIFY(text.contains("Адрес Bluetooth: 2B:80:03:42:8B:91"));
+        QVERIFY(text.contains("Уровень сигнала (RSSI): -56 dBm"));
         QVERIFY(QMetaObject::invokeMethod(popup,"close"));
         window->setProperty("page",1);
         window->setProperty("captureQuery","0x168f");

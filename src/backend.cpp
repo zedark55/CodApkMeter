@@ -414,6 +414,9 @@ void Backend::ingest(const QString &source, int company, const QString &service,
     meter["kind"]=protocol->json.value("kind").toString();
     meter["mode"]=protocol->json.value("encryption").toObject().value("mode").toString();
     meter["demo"]=m_demo; meter["lastSeen"]=when(); meter["rssi"]=rssi;
+    // Запоминаем последний известный адрес, в том числе из архивного пакета.
+    // Он может меняться и поэтому не используется как идентификатор карточки.
+    if (!address.isEmpty()) meter["address"]=address;
     // lastSeen — время приёма телефоном, в том числе архива/ошибочного пакета
     // уже известного прибора. deviceTimestamp ниже относится к самому измерению.
     meter["lastPacketType"]=!result.ok ? "Ошибка пакета" : result.archived ? "Архив" : "Текущие показания";

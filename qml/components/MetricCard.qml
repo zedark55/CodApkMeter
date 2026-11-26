@@ -9,7 +9,7 @@ Panel {
     required property var meter
     signal tapped()
     property color accent: meter.kind === "electricity" ? "#f2c27a" : meter.name.indexOf("Горячая") >= 0 ? "#f19d8d" : "#83d6e9"
-    implicitHeight: 246
+    implicitHeight: 270
     border.color: area.containsMouse ? "#52657c" : "#243142"
     MouseArea { id: area; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: card.tapped() }
     ColumnLayout {
@@ -25,6 +25,7 @@ Panel {
             Text { textFormat: Text.PlainText; text: "Приём: " + (card.meter.age || "—"); font.pixelSize: 11; color: "#91a2b8" }
         }
         Text { textFormat: Text.PlainText; text: card.meter.name; Layout.fillWidth: true; elide: Text.ElideRight; color: "#dce5f2"; font.pixelSize: 15; font.weight: Font.Medium }
+        Text { textFormat: Text.PlainText; text: "Bluetooth: " + (card.meter.address || "—"); color: "#91a2b8"; font.pixelSize: 11; Layout.fillWidth: true; wrapMode: Text.WrapAnywhere }
         RowLayout {
             spacing: 8
             Text { textFormat: Text.PlainText; text: card.meter.hasReading ? Number(card.meter.reading).toLocaleString(Qt.locale("ru_RU"),'f',card.meter.readingDecimals === undefined ? (card.meter.kind === "electricity" ? 2 : 3) : card.meter.readingDecimals) : "—"; color: "#f1f6ff"; font.pixelSize: 34; font.weight: Font.DemiBold; font.letterSpacing: -1 }
