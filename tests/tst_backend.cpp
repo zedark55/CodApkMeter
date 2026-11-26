@@ -179,13 +179,59 @@ private slots:
         Backend b;
         for (quint32 i=0;i<51;i++) {
             qToLittleEndian<quint32>(1000+i,archive.data()+7);
+            archive[21]=char(i%3);
             b.ingest("manufacturer",5775,{},archive,-60,{});
         }
         auto m=b.meters().first().toMap();
         QVERIFY(!m.value("hasReading").toBool()); QVERIFY(!m.contains("reading"));
-        QCOMPARE(m.value("history").toList().size(),0); QCOMPARE(m.value("archives").toList().size(),48);
+        QCOMPARE(m.value("history").toList().size(),0); QCOMPARE(m.value("archives").toList().size(),3);
         QCOMPARE(m.value("archives").toList().first().toMap().value("timestamp").toLongLong(),1050LL);
-        QCOMPARE(m.value("archives").toList().last().toMap().value("timestamp").toLongLong(),1003LL);
+        QCOMPARE(m.value("archives").toList().last().toMap().value("timestamp").toLongLong(),1048LL);
+        QCOMPARE(m.value("archives").toList().first().toMap().value("type").toInt(),2);
+        QCOMPARE(m.value("archives").toList().last().toMap().value("type").toInt(),0);
+        // Запоздалый месячный пакет не вытесняет последний месячный архив.
+        qToLittleEndian<quint32>(1,archive.data()+7);
+        b.ingest("manufacturer",5775,{},archive,-60,{});
+        QCOMPARE(b.meters().first().toMap().value("archives"),m.value("archives"));
+        // Повтор с тем же временем может уточнить значение без новой записи.
+        qToLittleEndian<quint32>(1050,archive.data()+7);
+        qToLittleEndian<quint32>(500,archive.data()+11);
+        b.ingest("manufacturer",5775,{},archive,-60,{});
+        const auto latest=b.meters().first().toMap().value("archives").toList();
+        QCOMPARE(latest.size(),3);
+        QCOMPARE(latest.first().toMap().value("reading").toDouble(),500*0.0001);
+    }
+    void legacyArchiveHistoryIsReducedAndSavedOnLoad() {
+        {
+            Backend legacy;
+            legacy.ingest("manufacturer",0x168f,{},QByteArray::fromHex("64785634120605f1cae16a40e20100db030000020037015a1be803"),-60,{});
+            auto m=legacy.m_meters.first().toMap();
+            QVariantList archives;
+            for (int i=0;i<48;++i) archives.append(QVariantMap{{"timestamp",1000+i},{"type",i%3},{"reading",double(i)}});
+            m["archives"]=archives; legacy.m_meters[0]=m;
+            QVERIFY(legacy.persist());
+        }
+        Backend upgraded;
+        const auto m=upgraded.meters().first().toMap();
+        const auto archives=m.value("archives").toList();
+        QCOMPARE(archives.size(),3);
+        QCOMPARE(archives.first().toMap().value("timestamp").toInt(),1047);
+        QCOMPARE(archives.last().toMap().value("timestamp").toInt(),1045);
+        QVERIFY(m.value("hasReading").toBool());
+        QCOMPARE(m.value("reading").toDouble(),12.3456);
+        auto savedArchiveCount=[&] {
+            QFile file(upgraded.storage+"/meters.json");
+            if (!file.open(QIODevice::ReadOnly)) return qsizetype(-1);
+            const auto array=QJsonDocument::fromJson(file.readAll()).array();
+            return array.isEmpty() ? qsizetype(-1) : array.first().toObject().value("archives").toArray().size();
+        };
+        QTRY_COMPARE(savedArchiveCount(),qsizetype(3));
+        const auto path=temp.filePath("latest-archives.json");
+        QVERIFY(upgraded.exportReadings(QUrl::fromLocalFile(path)).isEmpty());
+        QFile exported(path); QVERIFY(exported.open(QIODevice::ReadOnly));
+        QCOMPARE(QJsonDocument::fromJson(exported.readAll()).object().value("meters").toArray().first().toObject().value("archives").toArray().size(),3);
+        Backend reloaded;
+        QCOMPARE(reloaded.meters().first().toMap().value("archives"),m.value("archives"));
     }
     void malformedEtoDoesNotCreateOrCorruptMeter() {
         auto good=QByteArray::fromHex("64785634120605f1cae16a40e20100db030000020037015a1be803");

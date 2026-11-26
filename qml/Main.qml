@@ -430,7 +430,7 @@ ApplicationWindow {
                     }
                 }
                 Text { textFormat: Text.PlainText; visible: ["aes-128-ctr","aes-128-cbc"].indexOf(window.selected.mode) >= 0; text: "AES-CTR/CBC не проверяет подлинность пакета. Неверный ключ может дать правдоподобные показания."; color: "#f2c27a"; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 11 }
-                SectionLabel { visible: (window.selected.archives || []).length > 0; text: "АРХИВ ПРИБОРА" }
+                SectionLabel { visible: (window.selected.archives || []).length > 0; text: "ПОСЛЕДНИЕ АРХИВЫ" }
                 Repeater {
                     model: window.selected.archives || []
                     ColumnLayout {

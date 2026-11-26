@@ -34,6 +34,30 @@ bool clearJavaException() {
 #endif
 const QByteArray demoKey = QByteArray::fromHex("00112233445566778899aabbccddeeff");
 QString when() { return QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs); }
+QVariantList latestArchives(const QVariantList &archives) {
+    // Только последнее время для каждого типа: 0 — час, 1 — сутки, 2 — месяц.
+    // Старый пакет не вытесняет новый; при одинаковом времени обновляем поля.
+    QVariantList latest;
+    for (const auto &v : archives) {
+        const auto record=v.toMap();
+        const int type=record.value("type",-1).toInt();
+        if (type<0 || type>2) continue;
+        bool found=false;
+        for (auto &item : latest) {
+            const auto old=item.toMap();
+            if (old.value("type").toInt()!=type) continue;
+            if (record.value("timestamp").toLongLong()>=old.value("timestamp").toLongLong()) item=record;
+            found=true; break;
+        }
+        if (!found) latest.append(record);
+    }
+    std::sort(latest.begin(),latest.end(),[](const QVariant &a,const QVariant &b) {
+        const auto x=a.toMap(),y=b.toMap();
+        if (x.value("timestamp").toLongLong()!=y.value("timestamp").toLongLong()) return x.value("timestamp").toLongLong()>y.value("timestamp").toLongLong();
+        return x.value("type").toInt()<y.value("type").toInt();
+    });
+    return latest;
+}
 bool writeJson(const QString &file, const QJsonDocument &doc) {
     // QSaveFile заменяет целевой файл только после успешного commit: ошибка
     // записи не должна оставлять вместо показаний частично записанный JSON.
@@ -119,6 +143,7 @@ Backend::Backend(QObject *parent) : QObject(parent) {
         else dirty=false;
     });
     if (!storageError.isEmpty()) setStatus(storageError);
+    else if (dirty) saveTimer.start(); // Записываем сокращённые архивы старой версии.
 }
 Backend::~Backend() {
 #ifdef Q_OS_ANDROID
@@ -166,6 +191,11 @@ void Backend::load() {
                     m["protocolName"]=p.name();
                 }
                 if (!supported) { m["valid"]=false; m["error"]="Протокол прибора не поддерживается этой версией приложения"; }
+                if (m.contains("archives")) {
+                    const auto previous=m.value("archives").toList();
+                    const auto latest=latestArchives(previous);
+                    if (latest!=previous) { m["archives"]=latest; dirty=true; }
+                }
                 m_meters.append(m);
             }
         }
@@ -429,8 +459,8 @@ void Backend::ingest(const QString &source, int company, const QString &service,
             meter["unit"]=result.unit;
         }
         if (result.archived) {
-            // Архив хранится отдельно и не меняет текущее показание. Повтор
-            // записи определяется парой (время, тип); оставляем до 48 последних.
+            // Архив хранится отдельно и не меняет текущее показание. Для каждого
+            // типа оставляем только запись с последним временем: всего до трёх.
             // Даже архив с UNIX-временем 0 не задаёт время текущего измерения.
             QVariantMap archive{{"timestamp",result.metadata.value("deviceTimestamp")},
                 {"time",result.metadata.value("deviceTime")},{"type",result.metadata.value("archiveType")},
@@ -438,21 +468,8 @@ void Backend::ingest(const QString &source, int company, const QString &service,
                 {"reverse",result.metadata.value("reverse")},{"statusCode",result.metadata.value("statusCode")},
                 {"statusText",result.metadata.value("statusText")},{"decimals",result.metadata.value("readingDecimals")}};
             auto archives=meter.value("archives").toList();
-            bool replaced=false;
-            for (int i=0;i<archives.size();i++) {
-                const auto old=archives[i].toMap();
-                if (old.value("timestamp")==archive.value("timestamp") && old.value("type")==archive.value("type")) {
-                    archives[i]=archive; replaced=true; break;
-                }
-            }
-            if (!replaced) archives.append(archive);
-            std::sort(archives.begin(),archives.end(),[](const QVariant &a,const QVariant &b) {
-                const auto x=a.toMap(),y=b.toMap();
-                if (x.value("timestamp").toLongLong()!=y.value("timestamp").toLongLong()) return x.value("timestamp").toLongLong()>y.value("timestamp").toLongLong();
-                return x.value("type").toInt()<y.value("type").toInt();
-            });
-            while (archives.size()>48) archives.removeLast();
-            meter["archives"]=archives;
+            archives.append(archive);
+            meter["archives"]=latestArchives(archives);
             if (!meter.value("hasReading").toBool()) meter["fields"]=result.fields;
         } else {
             const bool ordered=!result.metadata.contains("deviceTimestamp") || !meter.contains("deviceTimestamp")
